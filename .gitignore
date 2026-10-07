@@ -1,0 +1,51 @@
+# IDE and editor settings
+.vscode/
+.idea/
+*.code-workspace
+*.suo
+*.user
+*.userosscache
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Local conversion and test intermediates
+hakka-village.intermediate.obj
+hakka-village.intermediate.mtl
+hakka-village.test.obj
+hakka-village.test.mtl
+_fbx_to_obj_test.ms
+fbx-to-obj-test.txt
+models/hakka-village.test.glb
+
+# Temporary and backup files
+*.tmp
+*.temp
+*.bak
+*.bak.*
+*~
+*.log
+
+# 3ds Max local source/backup files
+*.max
+*.max.bak
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+

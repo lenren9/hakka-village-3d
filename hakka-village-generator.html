@@ -1,0 +1,4862 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <title>客家围龙屋古村地图生成器</title>
+  <style>
+    :root {
+      --panel: rgba(13, 20, 17, 0.86);
+      --panel-line: rgba(208, 220, 204, 0.18);
+      --text: #eef4eb;
+      --muted: #aebcaf;
+      --accent: #d6ad52;
+      --accent-2: #7fb79a;
+      --danger: #e08d7d;
+      --shadow: rgba(0, 0, 0, 0.38);
+      font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 65% 18%, rgba(104, 139, 110, 0.18), transparent 36%),
+        linear-gradient(160deg, #18241e 0%, #0c1512 48%, #111914 100%);
+      color: var(--text);
+    }
+
+    body {
+      position: relative;
+    }
+
+    #scene {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+      outline: none;
+    }
+
+    .hud {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .panel {
+      position: absolute;
+      top: 18px;
+      left: 18px;
+      width: min(378px, calc(100vw - 36px));
+      max-height: calc(100vh - 36px);
+      overflow: auto;
+      padding: 16px;
+      border: 1px solid var(--panel-line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 18px 48px var(--shadow);
+      backdrop-filter: blur(16px) saturate(1.1);
+      pointer-events: auto;
+      scrollbar-width: thin;
+    }
+
+    .eyebrow {
+      margin: 0 0 5px;
+      color: var(--accent-2);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(20px, 2.2vw, 28px);
+      line-height: 1.2;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+
+    .subtitle {
+      margin: 7px 0 14px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .primary-button {
+      width: 100%;
+      min-height: 46px;
+      padding: 0 18px;
+      border: 0;
+      border-radius: 7px;
+      background: linear-gradient(135deg, #d9b35d, #b88d37);
+      color: #182016;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
+      transition: transform 160ms ease, filter 160ms ease, opacity 160ms ease;
+    }
+
+    .primary-button:hover {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+    }
+
+    .primary-button:active {
+      transform: translateY(0);
+    }
+
+    .primary-button:disabled {
+      cursor: wait;
+      opacity: 0.62;
+      transform: none;
+    }
+
+    .view-switch {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+      padding: 4px;
+      margin: 10px 0 2px;
+      border: 1px solid var(--panel-line);
+      border-radius: 7px;
+      background: rgba(255, 255, 255, 0.035);
+    }
+
+    .view-button {
+      min-height: 34px;
+      border: 0;
+      border-radius: 5px;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 160ms ease, color 160ms ease;
+    }
+
+    .view-button:hover {
+      color: var(--text);
+    }
+
+    .view-button.active {
+      background: rgba(127, 183, 154, 0.22);
+      color: #eaf6ea;
+      box-shadow: inset 0 0 0 1px rgba(127, 183, 154, 0.26);
+    }
+
+    .tool-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      margin: 11px 0 14px;
+    }
+
+    .toggle {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-height: 38px;
+      padding: 0 10px;
+      border: 1px solid var(--panel-line);
+      border-radius: 7px;
+      color: var(--muted);
+      font-size: 12px;
+      user-select: none;
+      cursor: pointer;
+    }
+
+    .toggle input {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      accent-color: var(--accent-2);
+    }
+
+    .seed {
+      min-width: 90px;
+      padding: 0 10px;
+      color: var(--muted);
+      font: 11px/1.2 Consolas, "SFMono-Regular", monospace;
+      text-align: right;
+      overflow-wrap: anywhere;
+    }
+
+    .rule-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      border: 1px solid rgba(127, 183, 154, 0.28);
+      border-radius: 7px;
+      background: rgba(127, 183, 154, 0.08);
+    }
+
+    .rule-summary strong {
+      color: var(--accent-2);
+      font-size: 14px;
+    }
+
+    .rule-summary span {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 9px 10px;
+      border: 1px solid rgba(220, 230, 217, 0.1);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.035);
+    }
+
+    .stat-label {
+      display: block;
+      margin-bottom: 3px;
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .stat-value {
+      display: block;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .checks {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+      padding-top: 12px;
+      border-top: 1px solid var(--panel-line);
+    }
+
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .check-dot {
+      flex: 0 0 7px;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent-2);
+      box-shadow: 0 0 0 3px rgba(127, 183, 154, 0.1);
+    }
+
+    .check.fail {
+      color: var(--danger);
+    }
+
+    .check.fail .check-dot {
+      background: var(--danger);
+      box-shadow: 0 0 0 3px rgba(224, 141, 125, 0.1);
+    }
+
+    .model-status {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.45;
+    }
+
+    .fallback-notice {
+      margin: 9px 0 0;
+      padding: 9px 10px;
+      border: 1px solid rgba(214, 173, 82, 0.28);
+      border-radius: 6px;
+      background: rgba(214, 173, 82, 0.08);
+      color: #e8d9a9;
+      font-size: 10px;
+      line-height: 1.5;
+    }
+
+    .legend {
+      position: absolute;
+      right: 18px;
+      bottom: 18px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 7px;
+      max-width: calc(100vw - 36px);
+      padding: 9px 11px;
+      border: 1px solid var(--panel-line);
+      border-radius: 7px;
+      background: rgba(11, 18, 15, 0.72);
+      color: var(--muted);
+      font-size: 10px;
+      backdrop-filter: blur(10px);
+      pointer-events: none;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+    }
+
+    .swatch {
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      background: #9b8d70;
+    }
+
+    .loading {
+      position: fixed;
+      inset: 0;
+      z-index: 4;
+      display: grid;
+      place-items: center;
+      background: rgba(8, 13, 11, 0.66);
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 280ms ease, visibility 280ms ease;
+      pointer-events: auto;
+    }
+
+    .loading.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .loading-card {
+      width: min(310px, calc(100vw - 44px));
+      padding: 20px;
+      border: 1px solid var(--panel-line);
+      border-radius: 8px;
+      background: #111a16;
+      box-shadow: 0 22px 60px rgba(0, 0, 0, 0.48);
+      text-align: center;
+    }
+
+    .loading-title {
+      margin: 0 0 6px;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .loading-text {
+      margin: 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .spinner {
+      width: 28px;
+      height: 28px;
+      margin: 0 auto 14px;
+      border: 3px solid rgba(255, 255, 255, 0.12);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 850ms linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @media (max-width: 720px) {
+      .panel {
+        top: 10px;
+        left: 10px;
+        width: calc(100vw - 20px);
+        max-height: 50vh;
+        padding: 13px;
+      }
+
+      .subtitle {
+        display: none;
+      }
+
+      .legend {
+        right: 10px;
+        bottom: 10px;
+        left: 10px;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="scene" aria-label="可旋转缩放的客家围龙屋古村三维地图"></canvas>
+
+  <div class="hud">
+    <section class="panel" aria-label="古村生成控制台">
+      <p class="eyebrow">Hakka Mountain Village</p>
+      <h1>客家围龙屋古村图谱</h1>
+      <p class="subtitle">程序化地形、河路、田宅与风水建筑生成器</p>
+
+      <button id="generate" class="primary-button" type="button">生成新的古村</button>
+
+      <div class="view-switch" role="group" aria-label="镜头视角">
+        <button id="view-orbit" class="view-button active" type="button" aria-pressed="true">自由视角</button>
+        <button id="view-overview" class="view-button" type="button" aria-pressed="false">俯瞰视角</button>
+      </div>
+
+      <div class="tool-row">
+        <label class="toggle" for="use-glb">
+          <input id="use-glb" type="checkbox" checked />
+          <span>优先加载 GLB</span>
+        </label>
+        <div id="seed" class="seed" aria-live="polite">seed: --</div>
+      </div>
+
+      <div class="rule-summary">
+        <strong id="rule-summary">规则校验 --</strong>
+        <span id="model-status">外部模型尚未检测</span>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-label">围龙屋规模</span>
+          <span id="stat-rings" class="stat-value">--</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">墙体材质</span>
+          <span id="stat-material" class="stat-value">--</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">风水塘</span>
+          <span id="stat-pond" class="stat-value">--</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">装饰密度</span>
+          <span id="stat-decoration" class="stat-value">--</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">民居与农田</span>
+          <span id="stat-buildings" class="stat-value">--</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">宝塔规格</span>
+          <span id="stat-pagoda" class="stat-value">--</span>
+        </div>
+      </div>
+
+      <div id="checks" class="checks" aria-live="polite"></div>
+      <p id="protocol-note" class="model-status"></p>
+      <p id="fallback-notice" class="fallback-notice">当前为纯代码预览模式，加载本地 GLB 可获极致画质</p>
+    </section>
+  </div>
+
+  <div class="legend" aria-label="地图图例">
+    <span class="legend-item"><i class="swatch" style="background:#80745f"></i>夯土</span>
+    <span class="legend-item"><i class="swatch" style="background:#68726f"></i>青砖</span>
+    <span class="legend-item"><i class="swatch" style="background:#58636a"></i>屋瓦</span>
+    <span class="legend-item"><i class="swatch" style="background:#4f8ca0"></i>水系</span>
+    <span class="legend-item"><i class="swatch" style="background:#7d954a"></i>农田</span>
+    <span class="legend-item"><i class="swatch" style="background:#355c38"></i>风水林</span>
+  </div>
+
+  <div id="loading" class="loading">
+    <div class="loading-card">
+      <div class="spinner"></div>
+      <p class="loading-title">正在营造古村</p>
+      <p class="loading-text">生成地形、河道、道路、宅院和风水林</p>
+    </div>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+
+    /*
+      单文件运行与 3ds Max 2022 工作流
+      =================================
+
+      A. 推荐运行方式
+      1. 保持本 HTML 与 models 文件夹位于同一目录。
+      2. 在 VS Code 中安装 Live Server 插件。
+      3. 右键本 HTML，选择 Open with Live Server。
+      4. 将 3ds Max 导出的 GLB 放到：
+         ./models/hakka-village.glb
+         ./models/weiwu_1.glb
+         ./models/weiwu_2.glb
+         ./models/weiwu_3.glb
+         ./models/gangwu.glb
+         ./models/diantang.glb
+         ./models/fengshuita.glb
+         ./models/paifang.glb
+         ./models/tree.glb
+      文件名不存在时会自动使用本文内置的高精度几何体模型。
+
+      B. 直接双击 file:// 的浏览器限制
+      Chrome、Edge 通常禁止 file:// 页面 fetch 本地 GLB。页面本身仍可运行，
+      但 GLB 会加载失败并自动回退到程序化模型。若必须绝对单文件，可把极小的
+      GLB 转成 Base64，并替换对应路径为 data URI：
+
+      PowerShell 示例：
+      $b=[Convert]::ToBase64String([IO.File]::ReadAllBytes(".\models\weiwu_1.glb"))
+      "data:model/gltf-binary;base64,$b" | Set-Clipboard
+
+      然后在 ASSET_MANIFEST 中将路径改为剪贴板中的 data URI。Base64 会让文件
+      体积增加约三分之一，高精度模型不建议嵌入。
+
+      C. 3ds Max 2022 导出建议
+      0. 3ds Max 2022 本身不一定预装 glTF Exporter。若 File > Export 中没有
+         glTF Binary (*.glb)，请先在 Autodesk App Store 安装官方
+         "glTF Exporter for 3ds Max 2022" 扩展，安装后重启 3ds Max。
+      1. 在 3ds Max 中使用真实世界单位，建议 1 单位 = 1 米。
+      2. 导出前把模型底面中心放到世界原点，模型正面朝 +Z，向上为 +Y。
+      3. 用 File > Export > Export Selected 或导出场景为 glTF Binary (.glb)。
+      4. 勾选材质、贴图、法线和切线；游戏用模型可用 2K 或 4K 贴图。
+      5. 若 3ds Max 导出器把正面朝向改成 -Z，可在 ASSET_MANIFEST 的
+         forwardOffset 中填 Math.PI 修正。
+      6. GLB 的建筑、塔和树可以共用材质；生成器会按目标尺寸自动缩放，
+         但建议围龙屋保持在约 20 至 42 米，塔约 7 至 12 米。
+    */
+
+    const WORLD = {
+      cols: 64,
+      rows: 48,
+      cell: 2.4,
+      maxPlacementAttempts: 5000
+    };
+    WORLD.width = WORLD.cols * WORLD.cell;
+    WORLD.depth = WORLD.rows * WORLD.cell;
+    WORLD.halfW = WORLD.width * 0.5;
+    WORLD.halfD = WORLD.depth * 0.5;
+
+    const ASSET_MANIFEST = {
+      // 首选的 3ds Max 整体围龙屋模型。存在时会优先替换程序化核心建筑；
+      // 缺失、损坏或 file:// 下无法读取时，会自动回退到内置几何体。
+      village: { path: "./models/hakka-village.glb", forwardOffset: 0 },
+      weiwu_1: { path: "./models/weiwu_1.glb", forwardOffset: 0 },
+      weiwu_2: { path: "./models/weiwu_2.glb", forwardOffset: 0 },
+      weiwu_3: { path: "./models/weiwu_3.glb", forwardOffset: 0 },
+      weiwu: { path: "./models/weiwu.glb", forwardOffset: 0 },
+      gangwu: { path: "./models/gangwu.glb", forwardOffset: 0 },
+      diantang: { path: "./models/diantang.glb", forwardOffset: 0 },
+      fengshuita: { path: "./models/fengshuita.glb", forwardOffset: 0 },
+      paifang: { path: "./models/paifang.glb", forwardOffset: 0 },
+      tree: { path: "./models/tree.glb", forwardOffset: 0 }
+    };
+
+    const ui = {
+      canvas: document.getElementById("scene"),
+      generate: document.getElementById("generate"),
+      useGLB: document.getElementById("use-glb"),
+      seed: document.getElementById("seed"),
+      ruleSummary: document.getElementById("rule-summary"),
+      modelStatus: document.getElementById("model-status"),
+      checks: document.getElementById("checks"),
+      protocolNote: document.getElementById("protocol-note"),
+      loading: document.getElementById("loading"),
+      statRings: document.getElementById("stat-rings"),
+      statMaterial: document.getElementById("stat-material"),
+      statPond: document.getElementById("stat-pond"),
+      statDecoration: document.getElementById("stat-decoration"),
+      statBuildings: document.getElementById("stat-buildings"),
+      statPagoda: document.getElementById("stat-pagoda"),
+      viewOrbit: document.getElementById("view-orbit"),
+      viewOverview: document.getElementById("view-overview"),
+      fallbackNotice: document.getElementById("fallback-notice")
+    };
+
+    // =========================================================
+    // 01 初始化模块：渲染器、场景、相机、控制器、后处理
+    // =========================================================
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x9eaa91, 0.0048);
+
+    const renderer = new THREE.WebGLRenderer({
+      canvas: ui.canvas,
+      antialias: true,
+      alpha: false,
+      powerPreference: "high-performance"
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight, false);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.08;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.setClearColor(0xb7c4ae, 1);
+
+    const camera = new THREE.PerspectiveCamera(
+      43,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      420
+    );
+    camera.position.set(82, 86, 112);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.065;
+    controls.target.set(-5, 0, -2);
+    controls.minDistance = 34;
+    controls.maxDistance = 235;
+    controls.maxPolarAngle = Math.PI * 0.475;
+    controls.minPolarAngle = Math.PI * 0.12;
+    controls.screenSpacePanning = false;
+
+    // 后处理只做增强，不是启动前置条件。这里禁止使用顶层 await，
+    // 否则 CDN 缓慢时会阻塞灯光、生成器和 UI 事件注册。
+    let composer = null;
+    let postProcessingReady = false;
+    let postProcessingRequested = false;
+
+    const hemiLight = new THREE.HemisphereLight(0xd9e7d6, 0x35402f, 2.05);
+    scene.add(hemiLight);
+
+    const sun = new THREE.DirectionalLight(0xffe1ad, 2.65);
+    sun.position.set(-72, 96, 62);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -95;
+    sun.shadow.camera.right = 95;
+    sun.shadow.camera.top = 92;
+    sun.shadow.camera.bottom = -92;
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 260;
+    sun.shadow.bias = -0.00018;
+    sun.shadow.normalBias = 0.035;
+    scene.add(sun);
+    scene.add(sun.target);
+    sun.target.position.set(-4, 0, 0);
+
+    const ambient = new THREE.AmbientLight(0xb8c6b5, 0.32);
+    scene.add(ambient);
+
+    const worldRoot = new THREE.Group();
+    scene.add(worldRoot);
+
+    const state = {
+      seed: 0,
+      rng: null,
+      models: new Map(),
+      modelsLoaded: false,
+      modelErrors: [],
+      loadingModels: false,
+      mapData: null,
+      waterTextures: [],
+      waterMaterials: [],
+      generatedTextures: [],
+      skyMaterial: null,
+      isGenerating: false,
+      externalLoadPromise: null,
+      cameraMode: "orbit",
+      cameraTween: null,
+      keys: new Set(),
+      lastFrame: performance.now(),
+      renderStats: {
+        triangles: 0
+      }
+    };
+
+    const geometryCache = new Map();
+    const gltfLoader = new GLTFLoader();
+
+    function cachedGeometry(key, factory) {
+      if (!geometryCache.has(key)) {
+        const geometry = factory();
+        geometry.userData.shared = true;
+        geometryCache.set(key, geometry);
+      }
+      return geometryCache.get(key);
+    }
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function lerp(a, b, t) {
+      return a + (b - a) * t;
+    }
+
+    function smoothstep(edge0, edge1, x) {
+      const t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
+      return t * t * (3 - 2 * t);
+    }
+
+    function randRange(rng, min, max) {
+      return min + (max - min) * rng();
+    }
+
+    function randInt(rng, min, max) {
+      return Math.floor(randRange(rng, min, max + 1));
+    }
+
+    function choice(rng, values) {
+      return values[Math.floor(rng() * values.length)];
+    }
+
+    function mulberry32(seed) {
+      let value = seed >>> 0;
+      return function random() {
+        value += 0x6d2b79f5;
+        let t = value;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    function makeSeed() {
+      if (window.crypto && window.crypto.getRandomValues) {
+        const values = new Uint32Array(1);
+        window.crypto.getRandomValues(values);
+        return values[0] >>> 0;
+      }
+      return (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
+    }
+
+    function nextFrame() {
+      return new Promise((resolve) => {
+        if (typeof requestAnimationFrame === "function") {
+          requestAnimationFrame(resolve);
+        } else {
+          setTimeout(resolve, 16);
+        }
+      });
+    }
+
+    // 把重任务拆成多个浏览器任务片段，让加载动画与窗口事件始终有机会执行。
+    function yieldToBrowser() {
+      return new Promise((resolve) => {
+        if (typeof requestAnimationFrame === "function") {
+          requestAnimationFrame(() => setTimeout(resolve, 0));
+        } else {
+          setTimeout(resolve, 0);
+        }
+      });
+    }
+
+    function scheduleConstruction(task, delay = 0) {
+      if (typeof requestIdleCallback === "function") {
+        requestIdleCallback(() => task(), { timeout: 900 });
+        return;
+      }
+      setTimeout(task, Math.max(0, delay));
+    }
+
+    function withTimeout(promise, timeout, message) {
+      let timer = 0;
+      return Promise.race([
+        promise,
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error(message)), timeout);
+        })
+      ]).finally(() => clearTimeout(timer));
+    }
+
+    function distance2D(a, b) {
+      return Math.hypot(a.x - b.x, a.z - b.z);
+    }
+
+    function axisAligned(segment) {
+      return Math.abs(segment.x2 - segment.x1) < 0.001 ||
+        Math.abs(segment.z2 - segment.z1) < 0.001;
+    }
+
+    function paintCanvas(size, draw) {
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const context = canvas.getContext("2d", { alpha: false });
+      draw(context, size);
+      return canvas;
+    }
+
+    function makeCanvasTexture(size, repeatX, repeatY, draw, colorSpace = THREE.SRGBColorSpace) {
+      const canvas = paintCanvas(size, draw);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.repeat.set(repeatX, repeatY);
+      texture.colorSpace = colorSpace;
+      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      texture.needsUpdate = true;
+      state.generatedTextures.push(texture);
+      return texture;
+    }
+
+    function makeEarthTexture(rng, baseColor = "#8d8069", accentColor = "#6f6452") {
+      return makeCanvasTexture(256, 5, 5, (ctx, size) => {
+        ctx.fillStyle = baseColor;
+        ctx.fillRect(0, 0, size, size);
+
+        for (let i = 0; i < 3400; i += 1) {
+          const x = rng() * size;
+          const y = rng() * size;
+          const radius = 0.25 + rng() * 1.65;
+          ctx.globalAlpha = 0.05 + rng() * 0.14;
+          ctx.fillStyle = rng() > 0.48 ? accentColor : "#d0c2a2";
+          ctx.beginPath();
+          ctx.arc(x, y, radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.globalAlpha = 0.18;
+        ctx.strokeStyle = "#524a3c";
+        ctx.lineWidth = 1.4;
+        for (let y = 18; y < size; y += 28) {
+          ctx.beginPath();
+          ctx.moveTo(0, y + (rng() - 0.5) * 3);
+          ctx.bezierCurveTo(
+            size * 0.3,
+            y + (rng() - 0.5) * 5,
+            size * 0.65,
+            y + (rng() - 0.5) * 5,
+            size,
+            y + (rng() - 0.5) * 3
+          );
+          ctx.stroke();
+        }
+
+        ctx.globalAlpha = 1;
+      });
+    }
+
+    function makeBrickTexture(rng, baseColor = "#727a76", mortarColor = "#4f5652") {
+      return makeCanvasTexture(256, 4, 4, (ctx, size) => {
+        ctx.fillStyle = mortarColor;
+        ctx.fillRect(0, 0, size, size);
+        const rowHeight = 22;
+        const brickWidth = 47;
+
+        for (let row = -1; row < Math.ceil(size / rowHeight) + 1; row += 1) {
+          const offset = row % 2 === 0 ? -brickWidth * 0.5 : 0;
+          for (let x = offset; x < size + brickWidth; x += brickWidth) {
+            const jitter = (rng() - 0.5) * 4;
+            const shade = 0.84 + rng() * 0.26;
+            ctx.fillStyle = shadeHex(baseColor, shade);
+            ctx.fillRect(x + 2, row * rowHeight + 2 + jitter, brickWidth - 4, rowHeight - 4);
+            ctx.globalAlpha = 0.16;
+            ctx.fillStyle = "#d9ddd8";
+            ctx.fillRect(x + 4, row * rowHeight + 4 + jitter, brickWidth - 8, 1);
+            ctx.globalAlpha = 1;
+          }
+        }
+
+        for (let i = 0; i < 520; i += 1) {
+          ctx.globalAlpha = 0.035 + rng() * 0.07;
+          ctx.fillStyle = rng() > 0.5 ? "#101713" : "#d4d9d3";
+          ctx.fillRect(rng() * size, rng() * size, 1 + rng() * 3, 1 + rng() * 3);
+        }
+        ctx.globalAlpha = 1;
+      });
+    }
+
+    function makeRoofTexture(rng) {
+      return makeCanvasTexture(256, 7, 7, (ctx, size) => {
+        ctx.fillStyle = "#58636a";
+        ctx.fillRect(0, 0, size, size);
+
+        const rowHeight = 18;
+        const tileWidth = 12;
+        for (let row = 0; row < size / rowHeight + 1; row += 1) {
+          const offset = row % 2 === 0 ? -tileWidth * 0.5 : 0;
+          for (let x = offset; x < size + tileWidth; x += tileWidth) {
+            ctx.fillStyle = shadeHex("#58636a", 0.82 + rng() * 0.3);
+            ctx.beginPath();
+            ctx.moveTo(x, row * rowHeight + rowHeight);
+            ctx.quadraticCurveTo(
+              x + tileWidth * 0.5,
+              row * rowHeight - 1 + rng() * 2,
+              x + tileWidth,
+              row * rowHeight + rowHeight
+            );
+            ctx.lineTo(x + tileWidth, row * rowHeight + rowHeight - 4);
+            ctx.quadraticCurveTo(
+              x + tileWidth * 0.5,
+              row * rowHeight + 2,
+              x,
+              row * rowHeight + rowHeight - 4
+            );
+            ctx.closePath();
+            ctx.fill();
+          }
+        }
+
+        ctx.globalAlpha = 0.2;
+        ctx.strokeStyle = "#b7c0c0";
+        ctx.lineWidth = 1;
+        for (let y = rowHeight; y < size; y += rowHeight) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(size, y);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      });
+    }
+
+    function makeCobbleTexture(rng) {
+      return makeCanvasTexture(256, 6, 6, (ctx, size) => {
+        ctx.fillStyle = "#716f65";
+        ctx.fillRect(0, 0, size, size);
+        for (let i = 0; i < 360; i += 1) {
+          const radiusX = 3 + rng() * 7;
+          const radiusY = 2 + rng() * 6;
+          const x = rng() * size;
+          const y = rng() * size;
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.rotate(rng() * Math.PI);
+          ctx.fillStyle = shadeHex("#9b9789", 0.78 + rng() * 0.38);
+          ctx.beginPath();
+          ctx.ellipse(0, 0, radiusX, radiusY, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 0.24;
+          ctx.fillStyle = "#252820";
+          ctx.beginPath();
+          ctx.ellipse(1, 1, radiusX, radiusY, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+          ctx.restore();
+        }
+      });
+    }
+
+    function makeStoneTexture(rng) {
+      return makeCanvasTexture(256, 5, 5, (ctx, size) => {
+        ctx.fillStyle = "#9c9b91";
+        ctx.fillRect(0, 0, size, size);
+        for (let i = 0; i < 2200; i += 1) {
+          ctx.globalAlpha = 0.025 + rng() * 0.09;
+          ctx.fillStyle = rng() > 0.5 ? "#f0efe7" : "#4b514d";
+          ctx.fillRect(rng() * size, rng() * size, 1 + rng() * 4, 1 + rng() * 4);
+        }
+        ctx.globalAlpha = 0.16;
+        ctx.strokeStyle = "#575d58";
+        ctx.lineWidth = 1;
+        for (let y = 5; y < size; y += 12) {
+          ctx.beginPath();
+          ctx.moveTo(0, y + rng() * 2);
+          ctx.lineTo(size, y - rng() * 2);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      });
+    }
+
+    function makeRoadTexture(rng) {
+      return makeCanvasTexture(256, 12, 3, (ctx, size) => {
+        ctx.fillStyle = "#807a6b";
+        ctx.fillRect(0, 0, size, size);
+        for (let i = 0; i < 5200; i += 1) {
+          ctx.globalAlpha = 0.035 + rng() * 0.16;
+          ctx.fillStyle = rng() > 0.45 ? "#c7bda2" : "#3e4138";
+          const r = 0.3 + rng() * 2.1;
+          ctx.beginPath();
+          ctx.arc(rng() * size, rng() * size, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      });
+    }
+
+    function makeWaterTexture(rng) {
+      return makeCanvasTexture(256, 8, 2, (ctx, size) => {
+        ctx.fillStyle = "#437b8b";
+        ctx.fillRect(0, 0, size, size);
+        ctx.strokeStyle = "rgba(218, 240, 238, 0.35)";
+        ctx.lineWidth = 1.3;
+        for (let i = 0; i < 48; i += 1) {
+          const y = rng() * size;
+          const x = rng() * size;
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.bezierCurveTo(
+            x + 12,
+            y - 3,
+            x + 22,
+            y + 3,
+            x + 38,
+            y
+          );
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 0.2;
+        ctx.fillStyle = "#dcefeb";
+        for (let i = 0; i < 260; i += 1) {
+          ctx.fillRect(rng() * size, rng() * size, 1 + rng() * 2, 1);
+        }
+        ctx.globalAlpha = 1;
+      });
+    }
+
+    function shadeHex(hex, factor) {
+      const color = new THREE.Color(hex);
+      color.multiplyScalar(factor);
+      return `#${color.getHexString()}`;
+    }
+
+    function applyWaterWave(material, amplitude = 0.055) {
+      material.onBeforeCompile = (shader) => {
+        shader.uniforms.uWaveTime = { value: 0 };
+        shader.uniforms.uWaveAmplitude = { value: amplitude };
+        shader.vertexShader = `
+          uniform float uWaveTime;
+          uniform float uWaveAmplitude;
+        ` + shader.vertexShader.replace(
+          "#include <begin_vertex>",
+          `
+            vec3 transformed = vec3(position);
+            transformed.y += uWaveAmplitude * (
+              sin(position.x * 0.42 + uWaveTime * 1.35) +
+              cos(position.z * 0.58 + uWaveTime * 1.12)
+            );
+          `
+        );
+        material.userData.shader = shader;
+      };
+      material.needsUpdate = true;
+      return material;
+    }
+
+    function createMaterialSet(config, rng) {
+      const wallIsBrick = config.wallType === "青砖";
+      const wallTexture = wallIsBrick
+        ? makeBrickTexture(rng)
+        : makeEarthTexture(rng, "#887a62", "#675d4b");
+      const roofTexture = makeRoofTexture(rng);
+      const cobbleTexture = makeCobbleTexture(rng);
+      const stoneTexture = makeStoneTexture(rng);
+      const roadTexture = makeRoadTexture(rng);
+      const waterTexture = makeWaterTexture(rng);
+      const grassTexture = makeCanvasTexture(256, 15, 12, (ctx, size) => {
+        ctx.fillStyle = "#62764d";
+        ctx.fillRect(0, 0, size, size);
+        for (let i = 0; i < 4800; i += 1) {
+          ctx.globalAlpha = 0.035 + rng() * 0.12;
+          ctx.fillStyle = rng() > 0.46 ? "#9aa364" : "#293d2d";
+          ctx.fillRect(rng() * size, rng() * size, 1 + rng() * 2, 1 + rng() * 4);
+        }
+        ctx.globalAlpha = 1;
+      });
+
+      const wallColor = wallIsBrick ? 0xb9c0bd : 0xc5b9a0;
+      const roofColor = choice(rng, [0x9aabb0, 0x87969c, 0x77858c]);
+
+      const waterMaterial = applyWaterWave(new THREE.MeshPhysicalMaterial({
+        map: waterTexture,
+        normalMap: waterTexture,
+        normalScale: new THREE.Vector2(0.34, 0.34),
+        color: 0x72b5bd,
+        transparent: true,
+        opacity: 0.76,
+        roughness: 0.17,
+        metalness: 0,
+        clearcoat: 0.82,
+        clearcoatRoughness: 0.08,
+        ior: 1.333,
+        reflectivity: 0.68,
+        transmission: 0.12,
+        thickness: 0.6,
+        side: THREE.DoubleSide,
+        depthWrite: false
+      }));
+      state.waterMaterials.push(waterMaterial);
+
+      return {
+        wall: new THREE.MeshStandardMaterial({
+          map: wallTexture,
+          color: wallColor,
+          roughness: 0.96,
+          metalness: 0,
+          bumpMap: wallTexture,
+          bumpScale: wallIsBrick ? 0.055 : 0.028
+        }),
+        wallSecondary: new THREE.MeshStandardMaterial({
+          map: wallTexture,
+          color: wallIsBrick ? 0xa7b0ac : 0xae9e7f,
+          roughness: 0.97,
+          metalness: 0
+        }),
+        roof: new THREE.MeshStandardMaterial({
+          map: roofTexture,
+          color: roofColor,
+          roughness: 0.9,
+          metalness: 0.02,
+          bumpMap: roofTexture,
+          bumpScale: 0.045
+        }),
+        roofDark: new THREE.MeshStandardMaterial({
+          color: 0x4c565b,
+          roughness: 0.94
+        }),
+        wood: new THREE.MeshStandardMaterial({
+          color: 0x5f3925,
+          roughness: 0.82
+        }),
+        carvedWood: new THREE.MeshStandardMaterial({
+          color: 0x7b4826,
+          roughness: 0.72
+        }),
+        stone: new THREE.MeshStandardMaterial({
+          map: stoneTexture,
+          color: 0xb8b4a8,
+          roughness: 0.98,
+          metalness: 0,
+          bumpMap: stoneTexture,
+          bumpScale: 0.045
+        }),
+        carvedStone: new THREE.MeshStandardMaterial({
+          map: stoneTexture,
+          color: 0xccc8bd,
+          roughness: 0.92,
+          bumpMap: stoneTexture,
+          bumpScale: 0.06
+        }),
+        cobble: new THREE.MeshStandardMaterial({
+          map: cobbleTexture,
+          color: 0xbab5a6,
+          roughness: 0.99,
+          bumpMap: cobbleTexture,
+          bumpScale: 0.075
+        }),
+        soil: new THREE.MeshStandardMaterial({
+          color: 0x604e36,
+          roughness: 1
+        }),
+        road: new THREE.MeshStandardMaterial({
+          map: roadTexture,
+          color: 0xbab29d,
+          roughness: 0.98,
+          bumpMap: roadTexture,
+          bumpScale: 0.035
+        }),
+        roadEdge: new THREE.MeshStandardMaterial({
+          color: 0x655f53,
+          roughness: 1
+        }),
+        grass: new THREE.MeshStandardMaterial({
+          map: grassTexture,
+          color: 0x87966d,
+          roughness: 1
+        }),
+        water: waterMaterial,
+        waterDark: new THREE.MeshStandardMaterial({
+          color: 0x264d55,
+          roughness: 0.45,
+          transparent: true,
+          opacity: 0.78
+        }),
+        crop: new THREE.MeshStandardMaterial({
+          color: choice(rng, [0x6f8e3c, 0x91a54b, 0x7e9c4c]),
+          roughness: 0.9
+        }),
+        trunk: new THREE.MeshStandardMaterial({
+          color: 0x65462c,
+          roughness: 1
+        }),
+        leafA: new THREE.MeshStandardMaterial({
+          color: choice(rng, [0x315f3a, 0x3e7041, 0x456d3c]),
+          roughness: 0.96
+        }),
+        leafB: new THREE.MeshStandardMaterial({
+          color: choice(rng, [0x547b3e, 0x6b8b48, 0x426b45]),
+          roughness: 0.96
+        }),
+        bamboo: new THREE.MeshStandardMaterial({
+          color: 0x759b4b,
+          roughness: 0.85
+        }),
+        paintedRed: new THREE.MeshStandardMaterial({
+          color: 0x8e392c,
+          roughness: 0.78
+        }),
+        paintedTeal: new THREE.MeshStandardMaterial({
+          color: 0x2f6768,
+          roughness: 0.76
+        }),
+        greySculpture: new THREE.MeshStandardMaterial({
+          color: 0xb9c1b8,
+          roughness: 0.88
+        }),
+        gold: new THREE.MeshStandardMaterial({
+          color: 0xb89543,
+          roughness: 0.42,
+          metalness: 0.48
+        }),
+        blackOpening: new THREE.MeshStandardMaterial({
+          color: 0x171714,
+          roughness: 0.96
+        }),
+        waterTexture
+      };
+    }
+
+    function createConfig(rng) {
+      const ringCount = randInt(rng, 1, 3);
+      const wallType = choice(rng, ["夯土", "青砖"]);
+      const pondShape = choice(rng, ["半月形", "圆形", "元宝形"]);
+      const terrainRelief = randRange(rng, 0.65, 1.48);
+      const decorationDensity = randRange(rng, 0.32, 1);
+
+      // 围龙屋作为全图视觉核心，规模明显大于普通民居。
+      const radius = 11.2 + (ringCount - 1) * 4.7;
+      const tulouX = randRange(rng, -31, -21);
+      const tulouZ = randRange(rng, -18, -10);
+      const pondRadius = randRange(rng, 6.4, 8.8);
+      const pondCenter = {
+        x: tulouX,
+        z: tulouZ + radius + pondRadius * 0.82
+      };
+
+      return {
+        ringCount,
+        wallType,
+        pondShape,
+        terrainRelief,
+        decorationDensity,
+        radius,
+        tulouX,
+        tulouZ,
+        tulouCenter: { x: tulouX, z: tulouZ },
+        pondRadius,
+        pondCenter,
+        wingCount: randInt(rng, 2, 4),
+        courtyardCount: randInt(rng, 1, 4),
+        houseCountTarget: randInt(rng, 14, 20),
+        farmCountTarget: randInt(rng, 8, 13),
+        treeCountTarget: randInt(rng, 88, 132),
+        pagodaSides: choice(rng, [6, 8]),
+        pagodaFloors: randInt(rng, 3, 9),
+        paletteName: choice(rng, ["雨岭", "溪背", "松岗", "禾坪"])
+      };
+    }
+
+    function createRoadPlan(rng, config) {
+      const riverZ = randRange(rng, 16, 23);
+      const riverWidth = randRange(rng, 7.5, 11);
+      const mainRoadX = randRange(rng, 13, 22);
+      const mainRoadWidth = randRange(rng, 5.5, 7);
+      const northRoadZ = randRange(rng, -33, -25);
+      const riversideRoadZ = riverZ - riverWidth * 0.5 - randRange(rng, 6.5, 10.5);
+      const eastRoadX = mainRoadX + randRange(rng, 20, 29);
+      const southRoadZ = randRange(rng, 34, 41);
+      const westStart = config.tulouX + config.radius + randRange(rng, 8, 13);
+
+      const river = {
+        x1: -WORLD.halfW,
+        x2: WORLD.halfW,
+        z: riverZ,
+        z1: riverZ,
+        z2: riverZ,
+        width: riverWidth,
+        axis: "x",
+        kind: "river"
+      };
+
+      const bridgeCenter = {
+        x: mainRoadX,
+        z: riverZ
+      };
+      const bridgeClearance = riverWidth * 0.5 + 2.25;
+
+      const roads = [
+        {
+          x1: mainRoadX,
+          z1: -WORLD.halfD + 4.5,
+          x2: mainRoadX,
+          z2: riverZ - bridgeClearance,
+          width: mainRoadWidth,
+          axis: "z",
+          kind: "main"
+        },
+        {
+          x1: mainRoadX,
+          z1: riverZ + bridgeClearance,
+          x2: mainRoadX,
+          z2: WORLD.halfD - 4.5,
+          width: mainRoadWidth,
+          axis: "z",
+          kind: "main"
+        },
+        {
+          x1: westStart,
+          z1: northRoadZ,
+          x2: WORLD.halfW - 5,
+          z2: northRoadZ,
+          width: randRange(rng, 4.1, 5.2),
+          axis: "x",
+          kind: "cross"
+        },
+        {
+          x1: westStart,
+          z1: riversideRoadZ,
+          x2: WORLD.halfW - 5,
+          z2: riversideRoadZ,
+          width: randRange(rng, 4.4, 5.7),
+          axis: "x",
+          kind: "waterfront"
+        },
+        {
+          x1: eastRoadX,
+          z1: northRoadZ,
+          x2: eastRoadX,
+          z2: southRoadZ,
+          width: randRange(rng, 3.8, 4.9),
+          axis: "z",
+          kind: "cross"
+        },
+        {
+          x1: mainRoadX,
+          z1: southRoadZ,
+          x2: WORLD.halfW - 5,
+          z2: southRoadZ,
+          width: randRange(rng, 4, 5),
+          axis: "x",
+          kind: "cross"
+        }
+      ];
+
+      const bridgeRoad = {
+        x1: mainRoadX,
+        z1: riverZ - bridgeClearance,
+        x2: mainRoadX,
+        z2: riverZ + bridgeClearance,
+        width: mainRoadWidth,
+        axis: "z",
+        kind: "bridge"
+      };
+
+      return {
+        river,
+        riverZ,
+        riverWidth,
+        mainRoadX,
+        mainRoadWidth,
+        northRoadZ,
+        riversideRoadZ,
+        eastRoadX,
+        southRoadZ,
+        roads,
+        bridgeRoad,
+        bridgeCenter,
+        allRoadSegments: [...roads, bridgeRoad],
+        crossings: [{ river, road: bridgeRoad }]
+      };
+    }
+
+    function nearestPointOnSegment(x, z, segment) {
+      const dx = segment.x2 - segment.x1;
+      const dz = segment.z2 - segment.z1;
+      const lengthSq = dx * dx + dz * dz;
+      if (lengthSq < 0.0001) {
+        return { x: segment.x1, z: segment.z1, distance: Math.hypot(x - segment.x1, z - segment.z1) };
+      }
+      const t = clamp(((x - segment.x1) * dx + (z - segment.z1) * dz) / lengthSq, 0, 1);
+      const px = segment.x1 + dx * t;
+      const pz = segment.z1 + dz * t;
+      return {
+        x: px,
+        z: pz,
+        distance: Math.hypot(x - px, z - pz),
+        t
+      };
+    }
+
+    function nearestRoad(x, z, plan) {
+      let best = null;
+      plan.allRoadSegments.forEach((segment) => {
+        const point = nearestPointOnSegment(x, z, segment);
+        if (!best || point.distance < best.distance) {
+          best = {
+            ...point,
+            segment
+          };
+        }
+      });
+      return best;
+    }
+
+    // =========================================================
+    // 02 地形、河道与道路模块
+    // =========================================================
+
+    function createTerrainSystem(config, plan) {
+      const phase1 = Math.random() * Math.PI * 2;
+      const phase2 = Math.random() * Math.PI * 2;
+
+      function baseHeight(x, z) {
+        const broad =
+          Math.sin(x * 0.075 + phase1) * 1.1 +
+          Math.sin(z * 0.095 + phase2) * 0.85 +
+          Math.sin((x + z) * 0.047 + phase1 * 1.7) * 0.55;
+        const backFactor = clamp((-z + 8) / (WORLD.halfD + 8), 0, 1);
+        const mountain = Math.pow(backFactor, 1.65) * 6.2 * config.terrainRelief;
+        let height = 1.45 + broad * config.terrainRelief + mountain;
+
+        const riverDistance = Math.abs(z - plan.riverZ);
+        const riverCut = -1.52 * Math.exp(-Math.pow(riverDistance / (plan.riverWidth * 0.54), 4));
+        height += riverCut;
+
+        const tulouDistance = Math.hypot(x - config.tulouX, z - config.tulouZ);
+        const tulouBase =
+          1.9 +
+          Math.sin(x * 0.05 + phase2) * 0.45 +
+          Math.sin(z * 0.055 + phase1) * 0.35;
+        const tulouBlend = 1 - smoothstep(config.radius * 0.82, config.radius + 8.5, tulouDistance);
+        height = lerp(height, tulouBase, tulouBlend * 0.92);
+
+        const pondDistance = Math.hypot(x - config.pondCenter.x, z - config.pondCenter.z);
+        const pondBlend = 1 - smoothstep(config.pondRadius * 0.72, config.pondRadius + 5.2, pondDistance);
+        height = lerp(height, tulouBase - 0.48, pondBlend * 0.92);
+
+        return height;
+      }
+
+      function heightAt(x, z) {
+        let height = baseHeight(x, z);
+        const nearest = nearestRoad(x, z, plan);
+        if (nearest) {
+          const shoulder = Math.exp(-Math.pow(nearest.distance / (nearest.segment.width * 1.45), 2));
+          height += shoulder * 0.09;
+        }
+        return height;
+      }
+
+      const waterY = 0.52 + config.terrainRelief * 0.12;
+      return { baseHeight, heightAt, waterY };
+    }
+
+    function createTerrainMesh(materials, heightAt) {
+      const geometry = new THREE.PlaneGeometry(
+        WORLD.width,
+        WORLD.depth,
+        WORLD.cols - 1,
+        WORLD.rows - 1
+      );
+      geometry.rotateX(-Math.PI * 0.5);
+
+      const positions = geometry.attributes.position;
+      for (let i = 0; i < positions.count; i += 1) {
+        const x = positions.getX(i);
+        const z = positions.getZ(i);
+        positions.setY(i, heightAt(x, z));
+      }
+      positions.needsUpdate = true;
+      geometry.computeVertexNormals();
+
+      const terrain = new THREE.Mesh(geometry, materials.grass);
+      terrain.receiveShadow = true;
+      terrain.name = "terrain";
+      return terrain;
+    }
+
+    function buildRibbonGeometry(segment, width, elevation, segmentCount = 38, uvScale = 12) {
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+      const alongX = Math.abs(segment.x2 - segment.x1) > Math.abs(segment.z2 - segment.z1);
+      const half = width * 0.5;
+
+      for (let i = 0; i <= segmentCount; i += 1) {
+        const t = i / segmentCount;
+        const x = lerp(segment.x1, segment.x2, t);
+        const z = lerp(segment.z1, segment.z2, t);
+        const y = elevation(x, z, t);
+        if (alongX) {
+          positions.push(x, y, z - half, x, y, z + half);
+        } else {
+          positions.push(x - half, y, z, x + half, y, z);
+        }
+        uvs.push(t * uvScale, 0, t * uvScale, 1);
+
+        if (i < segmentCount) {
+          const offset = i * 2;
+          indices.push(offset, offset + 2, offset + 1, offset + 1, offset + 2, offset + 3);
+        }
+      }
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
+      return geometry;
+    }
+
+    function createRoads(plan, materials, heightAt, waterY) {
+      const group = new THREE.Group();
+      group.name = "road-network";
+
+      plan.roads.forEach((road) => {
+        const edge = new THREE.Mesh(
+          buildRibbonGeometry(road, road.width + 0.95, (x, z) => heightAt(x, z) + 0.09, 42, 14),
+          materials.roadEdge
+        );
+        edge.receiveShadow = true;
+        group.add(edge);
+
+        const surface = new THREE.Mesh(
+          buildRibbonGeometry(road, road.width, (x, z) => heightAt(x, z) + 0.15, 42, 14),
+          materials.road
+        );
+        surface.receiveShadow = true;
+        group.add(surface);
+      });
+
+      const bridgeSurface = new THREE.Mesh(
+        buildRibbonGeometry(
+          plan.bridgeRoad,
+          plan.mainRoadWidth + 0.8,
+          (x, z) => Math.max(heightAt(x, z) + 0.18, waterY + 1.18),
+          18,
+          5
+        ),
+        materials.road
+      );
+      bridgeSurface.receiveShadow = true;
+      bridgeSurface.castShadow = true;
+      group.add(bridgeSurface);
+
+      return group;
+    }
+
+    function createRiver(plan, materials, heightAt, waterY) {
+      const group = new THREE.Group();
+      group.name = "river";
+
+      const bed = new THREE.Mesh(
+        buildRibbonGeometry(
+          plan.river,
+          plan.riverWidth + 3.2,
+          () => waterY - 0.28,
+          76,
+          24
+        ),
+        materials.waterDark
+      );
+      bed.receiveShadow = true;
+      group.add(bed);
+
+      const water = new THREE.Mesh(
+        buildRibbonGeometry(plan.river, plan.riverWidth, () => waterY, 96, 28),
+        materials.water
+      );
+      water.name = "river-water";
+      water.renderOrder = 2;
+      group.add(water);
+
+      return group;
+    }
+
+    function createBridge(plan, materials, heightAt, waterY) {
+      const group = new THREE.Group();
+      const { x, z } = plan.bridgeCenter;
+      const deckY = Math.max(heightAt(x, z) + 1.16, waterY + 1.18);
+      group.position.set(x, deckY, z);
+      group.name = "stone-bridge";
+
+      const deck = new THREE.Mesh(
+        new THREE.BoxGeometry(plan.mainRoadWidth + 2.2, 0.62, plan.riverWidth + 5.2),
+        materials.stone
+      );
+      deck.position.y = -0.18;
+      deck.castShadow = true;
+      deck.receiveShadow = true;
+      group.add(deck);
+
+      const arch = new THREE.Mesh(
+        new THREE.TorusGeometry(plan.riverWidth * 0.36, 0.42, 8, 26, Math.PI),
+        materials.stone
+      );
+      arch.rotation.y = Math.PI * 0.5;
+      arch.rotation.z = Math.PI * 0.5;
+      arch.position.y = -1.1;
+      arch.castShadow = true;
+      group.add(arch);
+
+      const railGeometry = new THREE.BoxGeometry(0.26, 0.78, plan.riverWidth + 5.4);
+      const railOffset = plan.mainRoadWidth * 0.5 + 1.22;
+      for (const side of [-1, 1]) {
+        const rail = new THREE.Mesh(railGeometry, materials.carvedStone);
+        rail.position.set(side * railOffset, 0.72, 0);
+        rail.castShadow = true;
+        group.add(rail);
+
+        for (let i = -2; i <= 2; i += 1) {
+          const post = new THREE.Mesh(
+            new THREE.BoxGeometry(0.42, 1.28, 0.42),
+            materials.carvedStone
+          );
+          post.position.set(
+            side * railOffset,
+            0.42,
+            i * (plan.riverWidth + 4.2) / 5
+          );
+          post.castShadow = true;
+          group.add(post);
+        }
+      }
+
+      return group;
+    }
+
+    // =========================================================
+    // 03 建筑生成模块：围龙屋、杠屋、围屋、塔、牌坊
+    // =========================================================
+
+    function createGableRoofGeometry(length, depth, height, overhang = 0.42) {
+      const halfLength = length * 0.5 + overhang;
+      const halfDepth = depth * 0.5 + overhang;
+      const vertices = new Float32Array([
+        -halfLength, 0, -halfDepth,
+         halfLength, 0, -halfDepth,
+         halfLength, 0,  halfDepth,
+        -halfLength, 0,  halfDepth,
+        -halfLength, height, 0,
+         halfLength, height, 0
+      ]);
+      const indices = [
+        0, 1, 5, 0, 5, 4,
+        3, 4, 5, 3, 5, 2,
+        0, 4, 3, 1, 2, 5,
+        0, 3, 2, 0, 2, 1
+      ];
+      const uvs = new Float32Array([
+        0, 0, 1, 0, 1, 1, 0, 1, 0, 0.5, 1, 0.5
+      ]);
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
+      geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
+      return geometry;
+    }
+
+    function addRoof(group, length, depth, wallHeight, roofHeight, materials, options = {}) {
+      const roof = new THREE.Mesh(
+        createGableRoofGeometry(length, depth, roofHeight, options.overhang ?? 0.45),
+        materials.roof
+      );
+      roof.position.y = wallHeight;
+      roof.castShadow = true;
+      roof.receiveShadow = true;
+      group.add(roof);
+
+      const ridge = new THREE.Mesh(
+        cachedGeometry(
+          "ridge-roof",
+          () => new THREE.CylinderGeometry(0.11, 0.11, 1, 7, 1, false)
+        ),
+        materials.roofDark
+      );
+      ridge.scale.x = length + 0.75;
+      ridge.rotation.z = Math.PI * 0.5;
+      ridge.position.y = wallHeight + roofHeight;
+      ridge.castShadow = true;
+      group.add(ridge);
+
+      const eaveGeometry = new THREE.BoxGeometry(length + 0.9, 0.13, 0.18);
+      for (const side of [-1, 1]) {
+        const eave = new THREE.Mesh(eaveGeometry, materials.roofDark);
+        eave.position.set(0, wallHeight - 0.03, side * (depth * 0.5 + 0.48));
+        group.add(eave);
+      }
+
+      if (options.detailedRoof) {
+        const ribCount = clamp(Math.floor(length / 0.72), 5, 18);
+        const ribGeometry = cachedGeometry(
+          "roof-tile-rib",
+          () => new THREE.BoxGeometry(0.065, 0.055, 1)
+        );
+        const ribs = new THREE.InstancedMesh(
+          ribGeometry,
+          materials.roofDark,
+          ribCount * 2
+        );
+        const matrix = new THREE.Matrix4();
+        const quaternion = new THREE.Quaternion();
+        const position = new THREE.Vector3();
+        const scale = new THREE.Vector3();
+        const slopeLength = Math.hypot(depth * 0.5, roofHeight);
+        const slopeAngle = Math.atan2(roofHeight, depth * 0.5);
+        let index = 0;
+
+        for (const side of [-1, 1]) {
+          quaternion.setFromEuler(new THREE.Euler(side * slopeAngle, 0, 0));
+          for (let i = 0; i < ribCount; i += 1) {
+            position.set(
+              -length * 0.5 + (i + 0.5) * length / ribCount,
+              wallHeight + roofHeight * 0.5,
+              side * depth * 0.25
+            );
+            scale.set(1, 1, slopeLength);
+            matrix.compose(position, quaternion, scale);
+            ribs.setMatrixAt(index, matrix);
+            index += 1;
+          }
+        }
+        ribs.instanceMatrix.needsUpdate = true;
+        group.add(ribs);
+      }
+
+      return roof;
+    }
+
+    function createDoor(group, width, height, z, materials, decorationDensity, rng) {
+      const threshold = new THREE.Mesh(
+        new THREE.BoxGeometry(width + 0.55, 0.18, 0.48),
+        materials.carvedStone
+      );
+      threshold.position.set(0, 0.15, z);
+      threshold.castShadow = true;
+      group.add(threshold);
+
+      const door = new THREE.Mesh(
+        new THREE.BoxGeometry(width, height, 0.18),
+        materials.blackOpening
+      );
+      door.position.set(0, height * 0.5 + 0.2, z + 0.06);
+      group.add(door);
+
+      const frame = new THREE.Group();
+      const sideGeometry = new THREE.BoxGeometry(0.18, height + 0.32, 0.25);
+      for (const side of [-1, 1]) {
+        const post = new THREE.Mesh(sideGeometry, materials.carvedWood);
+        post.position.set(side * (width * 0.5 + 0.16), height * 0.5 + 0.26, z + 0.13);
+        post.castShadow = true;
+        frame.add(post);
+      }
+      const lintel = new THREE.Mesh(
+        new THREE.BoxGeometry(width + 0.64, 0.22, 0.26),
+        materials.carvedWood
+      );
+      lintel.position.set(0, height + 0.42, z + 0.13);
+      lintel.castShadow = true;
+      frame.add(lintel);
+      group.add(frame);
+
+      if (decorationDensity > 0.46) {
+        const plaque = new THREE.Mesh(
+          new THREE.BoxGeometry(width * 0.72, 0.46, 0.12),
+          rng() > 0.5 ? materials.gold : materials.carvedStone
+        );
+        plaque.position.set(0, height + 0.78, z + 0.2);
+        group.add(plaque);
+      }
+
+      if (decorationDensity > 0.7) {
+        for (const side of [-1, 1]) {
+          const drum = new THREE.Mesh(
+            cachedGeometry(
+              "stone-drum",
+              () => new THREE.CylinderGeometry(0.28, 0.28, 0.26, 12)
+            ),
+            materials.carvedStone
+          );
+          drum.rotation.z = Math.PI * 0.5;
+          drum.position.set(side * (width * 0.5 + 0.45), 0.4, z + 0.25);
+          drum.castShadow = true;
+          group.add(drum);
+        }
+      }
+    }
+
+    function createWindow(group, x, y, z, rotationY, materials, decorationDensity) {
+      const windowGroup = new THREE.Group();
+      windowGroup.position.set(x, y, z);
+      windowGroup.rotation.y = rotationY;
+
+      const panel = new THREE.Mesh(
+        new THREE.BoxGeometry(0.92, 0.82, 0.12),
+        materials.blackOpening
+      );
+      windowGroup.add(panel);
+
+      const frame = new THREE.Mesh(
+        new THREE.BoxGeometry(1.12, 1.02, 0.14),
+        materials.carvedWood
+      );
+      frame.position.z = -0.03;
+      windowGroup.add(frame);
+
+      if (decorationDensity > 0.42) {
+        const vertical = new THREE.Mesh(
+          new THREE.BoxGeometry(0.09, 0.82, 0.1),
+          materials.carvedWood
+        );
+        vertical.position.z = 0.08;
+        windowGroup.add(vertical);
+        const horizontal = new THREE.Mesh(
+          new THREE.BoxGeometry(0.95, 0.08, 0.1),
+          materials.carvedWood
+        );
+        horizontal.position.z = 0.08;
+        windowGroup.add(horizontal);
+      }
+
+      group.add(windowGroup);
+    }
+
+    function createGableHouse(width, depth, wallHeight, materials, rng, options = {}) {
+      const group = new THREE.Group();
+      const decorationDensity = options.decorationDensity ?? 0.5;
+      const plinthHeight = options.plinthHeight ?? 0.5;
+      const roofHeight = options.roofHeight ?? randRange(rng, 1.15, 1.65);
+
+      const plinth = new THREE.Mesh(
+        new THREE.BoxGeometry(width + 0.38, plinthHeight, depth + 0.38),
+        materials.stone
+      );
+      plinth.position.y = plinthHeight * 0.5;
+      plinth.castShadow = true;
+      plinth.receiveShadow = true;
+      group.add(plinth);
+
+      const walls = new THREE.Mesh(
+        new THREE.BoxGeometry(width, wallHeight, depth),
+        options.secondaryWall ? materials.wallSecondary : materials.wall
+      );
+      walls.position.y = plinthHeight + wallHeight * 0.5;
+      walls.castShadow = true;
+      walls.receiveShadow = true;
+      group.add(walls);
+
+      addRoof(
+        group,
+        width,
+        depth,
+        plinthHeight + wallHeight,
+        roofHeight,
+        materials,
+        {
+          overhang: options.overhang ?? 0.5,
+          detailedRoof: options.detailedRoof ?? false
+        }
+      );
+
+      if (options.door !== false) {
+        createDoor(
+          group,
+          Math.min(1.55, width * 0.28),
+          Math.min(2.15, wallHeight * 0.72),
+          depth * 0.5 + 0.12,
+          materials,
+          decorationDensity,
+          rng
+        );
+      }
+
+      const windowY = plinthHeight + wallHeight * 0.56;
+      createWindow(
+        group,
+        -width * 0.3,
+        windowY,
+        depth * 0.5 + 0.08,
+        0,
+        materials,
+        decorationDensity
+      );
+      createWindow(
+        group,
+        width * 0.3,
+        windowY,
+        depth * 0.5 + 0.08,
+        0,
+        materials,
+        decorationDensity
+      );
+
+      if (decorationDensity > 0.62) {
+        const frieze = new THREE.Mesh(
+          new THREE.BoxGeometry(width * 0.9, 0.28, 0.14),
+          rng() > 0.5 ? materials.paintedTeal : materials.paintedRed
+        );
+        frieze.position.set(0, plinthHeight + wallHeight - 0.2, depth * 0.5 + 0.16);
+        group.add(frieze);
+      }
+
+      group.userData.footprintRadius = Math.max(width, depth) * 0.5;
+      group.userData.wallHeight = wallHeight + plinthHeight;
+      return group;
+    }
+
+    function createBarrelHouse(materials, rng, decorationDensity) {
+      const width = randRange(rng, 7.5, 11.5);
+      const depth = randRange(rng, 4.2, 5.6);
+      const height = randRange(rng, 2.7, 3.35);
+      const group = createGableHouse(width, depth, height, materials, rng, {
+        decorationDensity,
+        roofHeight: randRange(rng, 1.05, 1.48),
+        secondaryWall: rng() > 0.58
+      });
+      group.name = "hakka-barrel-house";
+
+      if (rng() > 0.46) {
+        const annexWidth = randRange(rng, 2.2, 3.7);
+        const annex = new THREE.Mesh(
+          new THREE.BoxGeometry(annexWidth, height * 0.86, depth * 1.08),
+          materials.wallSecondary
+        );
+        annex.position.set(width * 0.5 + annexWidth * 0.5 - 0.08, height * 0.43 + 0.5, 0);
+        annex.castShadow = true;
+        annex.receiveShadow = true;
+        group.add(annex);
+
+        const annexRoof = new THREE.Mesh(
+          createGableRoofGeometry(annexWidth, depth * 1.08, 0.82, 0.35),
+          materials.roof
+        );
+        annexRoof.position.set(annex.position.x, height * 0.86 + 0.5, 0);
+        annexRoof.castShadow = true;
+        group.add(annexRoof);
+        group.userData.footprintRadius = (width * 0.5 + annexWidth) * 0.62;
+      }
+
+      return group;
+    }
+
+    function createHallHouse(materials, rng, decorationDensity) {
+      const width = randRange(rng, 11, 14);
+      const depth = randRange(rng, 8.5, 11);
+      const group = new THREE.Group();
+      group.name = "hakka-hall-house";
+
+      const front = createGableHouse(width, 3.5, 3.15, materials, rng, {
+        decorationDensity,
+        roofHeight: 1.25,
+        secondaryWall: false
+      });
+      front.position.z = depth * 0.5 - 1.75;
+      group.add(front);
+
+      const hall = createGableHouse(width * 0.82, 4.1, 3.7, materials, rng, {
+        decorationDensity: decorationDensity * 0.9,
+        roofHeight: 1.5,
+        door: false,
+        secondaryWall: true
+      });
+      hall.position.z = -depth * 0.5 + 2.1;
+      group.add(hall);
+
+      const wingWidth = 2.8;
+      const wingDepth = depth * 0.58;
+      for (const side of [-1, 1]) {
+        const wing = createGableHouse(wingWidth, wingDepth, 2.85, materials, rng, {
+          decorationDensity: decorationDensity * 0.65,
+          roofHeight: 1.0,
+          secondaryWall: true,
+          door: false
+        });
+        wing.rotation.y = Math.PI * 0.5;
+        wing.position.set(side * (width * 0.5 - wingWidth * 0.5), 0, 0);
+        group.add(wing);
+      }
+
+      const courtyard = new THREE.Mesh(
+        new THREE.BoxGeometry(width * 0.48, 0.12, depth * 0.4),
+        materials.cobble
+      );
+      courtyard.position.y = 0.12;
+      courtyard.receiveShadow = true;
+      group.add(courtyard);
+
+      group.userData.footprintRadius = Math.max(width, depth) * 0.55;
+      return group;
+    }
+
+    function createHuaTai(config, materials, rng) {
+      // 化胎属于堂横屋与最内围龙之间的固定礼仪空间；增建二围、三围时
+      // 只向外扩展围龙，不能继续侵占化胎，否则会失去围龙屋的核心轮廓。
+      const ringSpacing = 4.7;
+      const innermostRingRadius = config.radius - (config.ringCount - 1) * ringSpacing;
+      const innerRadius = Math.max(3.1, innermostRingRadius * 0.44);
+      const outerRadius = Math.max(
+        innerRadius + 1.8,
+        innermostRingRadius - 2.35
+      );
+      const group = new THREE.Group();
+      group.name = "huatai-cobblestone";
+
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(innerRadius, outerRadius, 64, 5, 0, Math.PI),
+        materials.cobble
+      );
+      ring.rotation.x = -Math.PI * 0.5;
+      ring.position.y = 0.13;
+      ring.receiveShadow = true;
+      group.add(ring);
+
+      const pebbleGeometry = cachedGeometry(
+        "huatai-pebble",
+        () => new THREE.DodecahedronGeometry(0.11, 0)
+      );
+      const pebbleCount = Math.round(42 + config.decorationDensity * 48);
+      const pebbles = new THREE.InstancedMesh(pebbleGeometry, materials.carvedStone, pebbleCount);
+      const matrix = new THREE.Matrix4();
+      const quaternion = new THREE.Quaternion();
+      const scale = new THREE.Vector3();
+      const position = new THREE.Vector3();
+
+      for (let i = 0; i < pebbleCount; i += 1) {
+        const theta = rng() * Math.PI;
+        const radius = Math.sqrt(
+          lerp(innerRadius * innerRadius, outerRadius * outerRadius, rng())
+        );
+        position.set(
+          Math.cos(theta) * radius,
+          0.25 + rng() * 0.035,
+          -Math.sin(theta) * radius
+        );
+        quaternion.setFromEuler(
+          new THREE.Euler(rng() * Math.PI, rng() * Math.PI, rng() * Math.PI)
+        );
+        const pebbleScale = randRange(rng, 0.55, 1.35);
+        scale.set(pebbleScale * 1.5, pebbleScale * 0.45, pebbleScale);
+        matrix.compose(position, quaternion, scale);
+        pebbles.setMatrixAt(i, matrix);
+      }
+      pebbles.receiveShadow = true;
+      group.add(pebbles);
+
+      return group;
+    }
+
+    function addTulouDecoration(group, config, materials, rng, frontHallZ, width) {
+      const density = config.decorationDensity;
+      const friezeZ = frontHallZ + 2.2;
+
+      const paintedFrieze = new THREE.Mesh(
+        new THREE.BoxGeometry(width * 0.88, 0.34, 0.18),
+        rng() > 0.5 ? materials.paintedTeal : materials.paintedRed
+      );
+      paintedFrieze.position.set(0, 3.39, friezeZ);
+      group.add(paintedFrieze);
+
+      if (density > 0.36) {
+        for (const side of [-1, 1]) {
+          const carving = new THREE.Mesh(
+            new THREE.BoxGeometry(0.42, 1.15, 0.16),
+            materials.carvedWood
+          );
+          carving.position.set(side * (width * 0.34), 1.62, friezeZ + 0.06);
+          group.add(carving);
+        }
+      }
+
+      if (density > 0.5) {
+        const barCount = Math.round(8 + density * 12);
+        for (let i = 0; i < barCount; i += 1) {
+          const bar = new THREE.Mesh(
+            new THREE.BoxGeometry(0.07, 0.92, 0.09),
+            materials.carvedWood
+          );
+          bar.position.set(
+            -width * 0.22 + i * (width * 0.44 / Math.max(barCount - 1, 1)),
+            2.72,
+            friezeZ + 0.08
+          );
+          group.add(bar);
+        }
+      }
+
+      if (density > 0.64) {
+        const sculptureCount = Math.round(4 + density * 7);
+        for (let i = 0; i < sculptureCount; i += 1) {
+          const relief = new THREE.Mesh(
+            cachedGeometry(
+              "cloud-relief",
+              () => new THREE.TorusGeometry(0.24, 0.055, 5, 12, Math.PI * 1.35)
+            ),
+            materials.greySculpture
+          );
+          relief.rotation.z = rng() * Math.PI;
+          relief.position.set(
+            randRange(rng, -width * 0.43, width * 0.43),
+            3.82 + rng() * 0.26,
+            friezeZ + 0.2
+          );
+          group.add(relief);
+        }
+      }
+    }
+
+    function createProceduralTulou(config, materials, rng) {
+      const group = new THREE.Group();
+      group.name = "weilongwu-procedural";
+
+      const foundation = new THREE.Mesh(
+        new THREE.CylinderGeometry(config.radius + 1.8, config.radius + 2.1, 0.28, 64),
+        materials.cobble
+      );
+      foundation.position.y = -0.02;
+      foundation.receiveShadow = true;
+      group.add(foundation);
+
+      const courtyardFloor = new THREE.Mesh(
+        new THREE.BoxGeometry(config.radius * 1.18, 0.15, config.radius * 0.92),
+        materials.cobble
+      );
+      courtyardFloor.position.set(0, 0.11, 0.5);
+      courtyardFloor.receiveShadow = true;
+      group.add(courtyardFloor);
+
+      const axisPath = new THREE.Mesh(
+        new THREE.BoxGeometry(2.15, 0.08, config.radius * 1.08),
+        materials.carvedStone
+      );
+      axisPath.position.set(0, 0.2, -0.6);
+      axisPath.receiveShadow = true;
+      group.add(axisPath);
+
+      // “三堂”：下堂最低，中堂居中，上堂最高，形成前低后高的祖堂轴线。
+      const halls = [
+        {
+          label: "下堂",
+          z: 4.85,
+          width: 11.8,
+          depth: 3.65,
+          wallHeight: 2.85,
+          roofHeight: 1.18,
+          baseY: 0.08,
+          secondaryWall: false
+        },
+        {
+          label: "中堂",
+          z: 0.1,
+          width: 12.7,
+          depth: 4.25,
+          wallHeight: 3.42,
+          roofHeight: 1.38,
+          baseY: 0.34,
+          secondaryWall: false
+        },
+        {
+          label: "上堂",
+          z: -5.15,
+          width: 13.7,
+          depth: 5.15,
+          wallHeight: 4.08,
+          roofHeight: 1.58,
+          baseY: 0.72,
+          secondaryWall: true
+        }
+      ];
+
+      halls.forEach((hall, hallIndex) => {
+        const platform = new THREE.Mesh(
+          new THREE.BoxGeometry(hall.width + 0.8, hall.baseY + 0.28, hall.depth + 0.72),
+          hallIndex === 0 ? materials.stone : materials.carvedStone
+        );
+        platform.position.set(0, (hall.baseY + 0.28) * 0.5, hall.z);
+        platform.receiveShadow = true;
+        platform.castShadow = true;
+        group.add(platform);
+
+        const hallGroup = createGableHouse(
+          hall.width,
+          hall.depth,
+          hall.wallHeight,
+          materials,
+          rng,
+          {
+            decorationDensity: config.decorationDensity * (1 - hallIndex * 0.06),
+            roofHeight: hall.roofHeight,
+            door: true,
+            secondaryWall: hall.secondaryWall,
+            detailedRoof: true
+          }
+        );
+        hallGroup.position.set(0, hall.baseY + 0.28, hall.z);
+        hallGroup.name = `central-hall-${hallIndex + 1}`;
+        group.add(hallGroup);
+
+        const axisStone = new THREE.Mesh(
+          new THREE.BoxGeometry(2.35, 0.12, hall.depth + 1.2),
+          materials.carvedStone
+        );
+        axisStone.position.set(0, hall.baseY + 0.34, hall.z + hall.depth * 0.5 + 0.55);
+        axisStone.receiveShadow = true;
+        group.add(axisStone);
+      });
+
+      // “两横”：东西横屋严格镜像，每侧再由堂横屋数量形成连续横屋。
+      const wingDepth = 7.8;
+      const wingStart = 6.65;
+      for (const side of [-1, 1]) {
+        for (let i = 0; i < config.wingCount; i += 1) {
+          const sectionWidth = randRange(rng, 2.55, 3.2);
+          const wing = createGableHouse(sectionWidth, wingDepth, 2.75, materials, rng, {
+            decorationDensity: config.decorationDensity * 0.62,
+            roofHeight: 0.95,
+            door: false,
+            secondaryWall: true
+          });
+          wing.rotation.y = Math.PI * 0.5;
+          wing.position.set(
+            side * (wingStart + i * 2.55),
+            0,
+            -0.2
+          );
+          wing.name = `horizontal-wing-${side > 0 ? "east" : "west"}-${i + 1}`;
+          group.add(wing);
+        }
+      }
+
+      for (let i = 0; i < config.courtyardCount; i += 1) {
+        const courtyardZ = [2.2, -2.1, -7.2][i % 3] + randRange(rng, -0.35, 0.35);
+        const court = new THREE.Mesh(
+          new THREE.BoxGeometry(2.35, 0.12, 1.55),
+          materials.carvedStone
+        );
+        court.position.set(randRange(rng, -2.8, 2.8), 0.23, courtyardZ);
+        court.receiveShadow = true;
+        group.add(court);
+
+        const drain = new THREE.Mesh(
+          new THREE.BoxGeometry(1.5, 0.07, 0.14),
+          materials.blackOpening
+        );
+        drain.position.set(court.position.x, 0.25, court.position.z);
+        group.add(drain);
+      }
+
+      group.add(createHuaTai(config, materials, rng));
+
+      const ringRadii = [];
+      for (let i = 0; i < config.ringCount; i += 1) {
+        ringRadii.push(config.radius - i * 4.7);
+      }
+      ringRadii.sort((a, b) => a - b);
+
+      ringRadii.forEach((radius, ringIndex) => {
+        // 每一围先铺一圈石基与檐廊，再把屋段排成同心半圆，轮廓更清晰。
+        const ringBand = new THREE.Mesh(
+          new THREE.RingGeometry(
+            Math.max(1.4, radius - 2.45),
+            radius + 1.38,
+            72,
+            2,
+            0,
+            Math.PI
+          ),
+          ringIndex % 2 === 0 ? materials.stone : materials.cobble
+        );
+        ringBand.rotation.x = -Math.PI * 0.5;
+        ringBand.position.y = 0.12 + ringIndex * 0.018;
+        ringBand.receiveShadow = true;
+        group.add(ringBand);
+
+        const count = Math.round(radius * 1.42 + 4);
+        for (let i = 0; i < count; i += 1) {
+          const t = (i + 0.5) / count * Math.PI;
+          const x = Math.cos(t) * radius;
+          const z = -Math.sin(t) * radius;
+          const tangentX = -Math.sin(t);
+          const tangentZ = -Math.cos(t);
+          const segmentLength = (Math.PI * radius / count) * 1.08;
+          const wallHeight = 3.02 - ringIndex * 0.23 + randRange(rng, -0.12, 0.12);
+          const ringHouse = createGableHouse(
+            segmentLength,
+            randRange(rng, 2.65, 3.45),
+            wallHeight,
+            materials,
+            rng,
+            {
+              decorationDensity: config.decorationDensity * 0.42,
+              roofHeight: randRange(rng, 0.78, 1.12),
+              door: rng() > 0.24,
+              secondaryWall: (i + ringIndex) % 3 !== 0,
+              plinthHeight: 0.34,
+              overhang: 0.28,
+              detailedRoof: false
+            }
+          );
+          ringHouse.position.set(x, 0.08 + ringIndex * 0.025, z);
+          // 围龙屋段的门面朝向中轴堂屋，而不是朝山外。
+          ringHouse.rotation.y = Math.atan2(-tangentZ, tangentX) + Math.PI;
+          group.add(ringHouse);
+        }
+      });
+
+      addTulouDecoration(group, config, materials, rng, halls[0].z, halls[0].width);
+
+      return group;
+    }
+
+    function createPondShape(shapeName, radius) {
+      const shape = new THREE.Shape();
+      if (shapeName === "圆形") {
+        shape.absarc(0, 0, radius, 0, Math.PI * 2, false);
+      } else if (shapeName === "半月形") {
+        shape.moveTo(-radius, 0);
+        shape.absarc(0, 0, radius, Math.PI, Math.PI * 2, false);
+        shape.lineTo(-radius, 0);
+      } else {
+        shape.moveTo(0, radius * 1.18);
+        shape.bezierCurveTo(
+          radius * 1.05,
+          radius * 0.86,
+          radius * 1.18,
+          radius * 0.12,
+          radius * 0.44,
+          -radius * 0.38
+        );
+        shape.bezierCurveTo(
+          radius * 0.06,
+          -radius * 0.6,
+          -radius * 0.06,
+          -radius * 0.6,
+          -radius * 0.44,
+          -radius * 0.38
+        );
+        shape.bezierCurveTo(
+          -radius * 1.18,
+          radius * 0.12,
+          -radius * 1.05,
+          radius * 0.86,
+          0,
+          radius * 1.18
+        );
+      }
+      return shape;
+    }
+
+    function createFengshuiPond(config, materials, rng, waterY) {
+      const group = new THREE.Group();
+      group.name = "fengshui-pond";
+      const shape = createPondShape(config.pondShape, config.pondRadius);
+      const shapeGeometry = new THREE.ShapeGeometry(shape, 48);
+      shapeGeometry.rotateX(-Math.PI * 0.5);
+
+      const mud = new THREE.Mesh(shapeGeometry.clone(), materials.waterDark);
+      mud.scale.setScalar(1.08);
+      mud.position.y = -0.16;
+      mud.receiveShadow = true;
+      group.add(mud);
+
+      const pondMaterial = materials.water.clone();
+      applyWaterWave(pondMaterial, 0.075);
+      pondMaterial.map = pondMaterial.map.clone();
+      pondMaterial.map.wrapS = THREE.RepeatWrapping;
+      pondMaterial.map.wrapT = THREE.RepeatWrapping;
+      pondMaterial.map.repeat.set(3.8, 2.2);
+      pondMaterial.opacity = 0.75;
+      pondMaterial.normalMap = pondMaterial.map;
+      state.waterTextures.push(pondMaterial.map);
+      state.waterMaterials.push(pondMaterial);
+
+      const water = new THREE.Mesh(shapeGeometry.clone(), pondMaterial);
+      water.position.y = 0.03;
+      water.renderOrder = 2;
+      group.add(water);
+
+      const points = shape.extractPoints(40).shape.map(
+        (point) => new THREE.Vector3(point.x, 0.07, -point.y)
+      );
+      if (points.length > 2 && points[0].distanceTo(points[points.length - 1]) < 0.0001) {
+        points.pop();
+      }
+      const rimGroup = new THREE.Group();
+      const rimSegmentGeometry = cachedGeometry(
+        "pond-rim-segment",
+        () => new THREE.CylinderGeometry(0.2, 0.2, 1, 7, 1, false)
+      );
+      const up = new THREE.Vector3(0, 1, 0);
+      for (let i = 0; i < points.length; i += 1) {
+        const start = points[i];
+        const end = points[(i + 1) % points.length];
+        const direction = end.clone().sub(start);
+        const segmentLength = direction.length();
+        if (segmentLength < 0.0001) {
+          continue;
+        }
+        const segment = new THREE.Mesh(rimSegmentGeometry, materials.carvedStone);
+        segment.position.copy(start).add(end).multiplyScalar(0.5);
+        segment.scale.y = segmentLength * 1.04;
+        segment.quaternion.setFromUnitVectors(up, direction.normalize());
+        segment.castShadow = true;
+        rimGroup.add(segment);
+      }
+      group.add(rimGroup);
+
+      const rockGeometry = cachedGeometry(
+        "pond-rock",
+        () => new THREE.DodecahedronGeometry(0.38, 0)
+      );
+      for (let i = 0; i < 12; i += 1) {
+        const angle = rng() * Math.PI * 2;
+        const radius = config.pondRadius * randRange(rng, 0.85, 1.08);
+        const rock = new THREE.Mesh(rockGeometry, materials.stone);
+        rock.position.set(
+          Math.cos(angle) * radius,
+          0.1,
+          Math.sin(angle) * radius
+        );
+        rock.scale.set(
+          randRange(rng, 0.5, 1.45),
+          randRange(rng, 0.35, 0.85),
+          randRange(rng, 0.5, 1.4)
+        );
+        rock.rotation.set(rng() * Math.PI, rng() * Math.PI, rng() * Math.PI);
+        rock.castShadow = true;
+        group.add(rock);
+      }
+
+      group.position.set(
+        config.pondCenter.x,
+        waterY,
+        config.pondCenter.z
+      );
+
+      return {
+        group,
+        center: config.pondCenter,
+        radius: config.pondRadius,
+        shapeName: config.pondShape
+      };
+    }
+
+    function markExternalModel(object) {
+      object.traverse((child) => {
+        child.userData.externalModel = true;
+      });
+    }
+
+    function instantiateExternalModel(key, options = {}) {
+      if (!ui.useGLB.checked || !state.models.has(key)) {
+        return null;
+      }
+
+      const source = state.models.get(key);
+      const root = new THREE.Group();
+      const orientation = new THREE.Group();
+      const instance = source.clone(true);
+      orientation.rotation.y = ASSET_MANIFEST[key]?.forwardOffset ?? 0;
+      orientation.add(instance);
+      root.add(orientation);
+
+      root.updateMatrixWorld(true);
+      let bounds = new THREE.Box3().setFromObject(orientation);
+      if (bounds.isEmpty()) {
+        return null;
+      }
+
+      const size = bounds.getSize(new THREE.Vector3());
+      const measured = options.axis === "height"
+        ? Math.max(size.y, 0.001)
+        : Math.max(size.x, size.z, 0.001);
+      const scale = (options.target ?? measured) / measured;
+      orientation.scale.multiplyScalar(scale);
+      root.updateMatrixWorld(true);
+
+      bounds = new THREE.Box3().setFromObject(orientation);
+      const center = bounds.getCenter(new THREE.Vector3());
+      orientation.position.x -= center.x;
+      orientation.position.z -= center.z;
+      orientation.position.y -= bounds.min.y;
+      orientation.position.y += options.yOffset ?? 0;
+
+      markExternalModel(root);
+      root.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+          if (child.material) {
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            materials.forEach((material) => {
+              if ("roughness" in material && options.roughness) {
+                material.roughness = options.roughness;
+              }
+            });
+          }
+        }
+      });
+      root.userData.modelKey = key;
+      root.userData.isExternal = true;
+      return root;
+    }
+
+    function createTulouArea(config, materials, rng, heightAt) {
+      const group = new THREE.Group();
+      group.name = "weilongwu-area";
+      group.position.set(config.tulouX, heightAt(config.tulouX, config.tulouZ) + 0.08, config.tulouZ);
+
+      const externalKey = `weiwu_${config.ringCount}`;
+      // 优先级：完整 3ds Max GLB -> 当前围数模型 -> 通用围龙屋 -> 程序化模型。
+      let external = instantiateExternalModel("village", {
+        target: (config.radius + 3.1) * 2,
+        yOffset: 0.12
+      });
+      if (!external) {
+        external = instantiateExternalModel(externalKey, {
+          target: (config.radius + 3.1) * 2,
+          yOffset: 0.12
+        });
+      }
+      if (!external && state.models.has("weiwu")) {
+        external = instantiateExternalModel("weiwu", {
+          target: (config.radius + 3.1) * 2,
+          yOffset: 0.12
+        });
+      }
+
+      if (external) {
+        group.add(external);
+        const ground = new THREE.Mesh(
+          new THREE.CylinderGeometry(config.radius + 2.3, config.radius + 2.45, 0.24, 64),
+          materials.cobble
+        );
+        ground.position.y = -0.02;
+        ground.receiveShadow = true;
+        group.add(ground);
+      } else {
+        group.add(createProceduralTulou(config, materials, rng));
+      }
+
+      const pond = createFengshuiPond(config, materials, rng, heightAt(config.pondCenter.x, config.pondCenter.z) - 0.08);
+
+      const forestCenter = {
+        x: config.tulouX,
+        z: config.tulouZ - config.radius - 7.4
+      };
+
+      return {
+        group,
+        pond,
+        forestCenter,
+        radius: config.radius,
+        isExternal: Boolean(external)
+      };
+    }
+
+    function createPagoda(config, materials, rng, heightAt) {
+      const external = instantiateExternalModel("fengshuita", {
+        target: 10.8,
+        axis: "height"
+      });
+      if (external) {
+        external.name = "hakka-fengshui-pagoda";
+        return external;
+      }
+
+      const group = new THREE.Group();
+      group.name = "hakka-fengshui-pagoda";
+      const sides = config.pagodaSides;
+      const floorCount = config.pagodaFloors;
+      let currentY = 0;
+      let radius = 3.15;
+
+      const terrace = new THREE.Mesh(
+        new THREE.CylinderGeometry(radius * 1.36, radius * 1.52, 0.55, sides),
+        materials.carvedStone
+      );
+      terrace.position.y = 0.275;
+      terrace.castShadow = true;
+      terrace.receiveShadow = true;
+      group.add(terrace);
+      currentY += 0.46;
+
+      const step = new THREE.Mesh(
+        new THREE.BoxGeometry(2.1, 0.28, 1.2),
+        materials.carvedStone
+      );
+      step.position.set(0, 0.25, radius * 1.2);
+      step.castShadow = true;
+      group.add(step);
+
+      for (let floor = 0; floor < floorCount; floor += 1) {
+        const floorHeight = lerp(1.72, 1.16, floor / Math.max(floorCount - 1, 1));
+        const taper = 0.88 - floor * 0.045;
+        radius *= taper;
+
+        const wall = new THREE.Mesh(
+          new THREE.CylinderGeometry(radius * 0.94, radius, floorHeight, sides, 1, false),
+          floor % 3 === 0 ? materials.wall : materials.wallSecondary
+        );
+        wall.position.y = currentY + floorHeight * 0.5;
+        wall.castShadow = true;
+        wall.receiveShadow = true;
+        group.add(wall);
+
+        const doorway = new THREE.Mesh(
+          new THREE.BoxGeometry(
+            Math.max(0.58, radius * 0.26),
+            floor === 0 ? Math.min(1.78, floorHeight * 0.88) : Math.min(0.82, floorHeight * 0.54),
+            0.14
+          ),
+          materials.blackOpening
+        );
+        doorway.position.set(
+          0,
+          currentY + (floor === 0 ? 0.92 : floorHeight * 0.54),
+          radius + 0.05
+        );
+        group.add(doorway);
+
+        const eave = new THREE.Mesh(
+          new THREE.CylinderGeometry(radius * 1.32, radius * 0.82, 0.32, sides),
+          materials.roof
+        );
+        eave.position.y = currentY + floorHeight + 0.06;
+        eave.castShadow = true;
+        group.add(eave);
+
+        const roof = new THREE.Mesh(
+          new THREE.ConeGeometry(radius * 1.12, 0.74, sides),
+          materials.roofDark
+        );
+        roof.position.y = currentY + floorHeight + 0.48;
+        roof.castShadow = true;
+        group.add(roof);
+
+        const railing = new THREE.Mesh(
+          new THREE.TorusGeometry(radius * 1.04, 0.065, 6, sides * 3),
+          materials.carvedStone
+        );
+        railing.rotation.x = Math.PI * 0.5;
+        railing.position.y = currentY + 0.12;
+        group.add(railing);
+
+        if (floor % 2 === 0) {
+          const lamp = new THREE.Mesh(
+            new THREE.OctahedronGeometry(0.18, 0),
+            materials.gold
+          );
+          lamp.position.set(radius * 0.95, currentY + floorHeight * 0.72, 0.2);
+          group.add(lamp);
+        }
+
+        currentY += floorHeight + 0.62;
+      }
+
+      const cap = new THREE.Mesh(
+        new THREE.ConeGeometry(radius * 1.2, 1.35, sides),
+        materials.roofDark
+      );
+      cap.position.y = currentY + 0.28;
+      cap.castShadow = true;
+      group.add(cap);
+
+      const finialStem = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.1, 0.12, 1.35, 8),
+        materials.gold
+      );
+      finialStem.position.y = currentY + 1.54;
+      group.add(finialStem);
+
+      for (let i = 0; i < 4; i += 1) {
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(0.25 + i * 0.07, 0.035, 6, 18),
+          materials.gold
+        );
+        ring.rotation.x = Math.PI * 0.5;
+        ring.position.y = currentY + 1.35 + i * 0.18;
+        group.add(ring);
+      }
+
+      group.userData.height = currentY + 2.1;
+      group.userData.sides = sides;
+      group.userData.floors = floorCount;
+      return group;
+    }
+
+    function createPaifang(materials, rng, config) {
+      const external = instantiateExternalModel("paifang", { target: 10.2 });
+      if (external) {
+        external.name = "four-pillar-three-bay-paifang";
+        return external;
+      }
+
+      const group = new THREE.Group();
+      group.name = "four-pillar-three-bay-paifang";
+      const pillarX = [-4.5, -1.45, 1.45, 4.5];
+      const pillarHeight = 5.2;
+
+      for (const x of pillarX) {
+        const base = new THREE.Mesh(
+          new THREE.BoxGeometry(0.88, 0.7, 1.34),
+          materials.carvedStone
+        );
+        base.position.set(x, 0.35, 0);
+        base.castShadow = true;
+        base.receiveShadow = true;
+        group.add(base);
+
+        const column = new THREE.Mesh(
+          new THREE.BoxGeometry(0.56, pillarHeight, 0.72),
+          materials.stone
+        );
+        column.position.set(x, pillarHeight * 0.5 + 0.62, 0);
+        column.castShadow = true;
+        group.add(column);
+
+        const cap = new THREE.Mesh(
+          new THREE.BoxGeometry(0.78, 0.3, 0.96),
+          materials.carvedStone
+        );
+        cap.position.set(x, pillarHeight + 0.78, 0);
+        cap.castShadow = true;
+        group.add(cap);
+      }
+
+      const lowerBeam = new THREE.Mesh(
+        new THREE.BoxGeometry(10.2, 0.42, 0.86),
+        materials.stone
+      );
+      lowerBeam.position.y = 4.24;
+      lowerBeam.castShadow = true;
+      group.add(lowerBeam);
+
+      const upperBeam = new THREE.Mesh(
+        new THREE.BoxGeometry(9.55, 0.38, 0.8),
+        materials.stone
+      );
+      upperBeam.position.y = 5.14;
+      upperBeam.castShadow = true;
+      group.add(upperBeam);
+
+      const centralPlaque = new THREE.Mesh(
+        new THREE.BoxGeometry(2.2, 1.05, 0.22),
+        materials.carvedStone
+      );
+      centralPlaque.position.set(0, 5.22, 0.51);
+      centralPlaque.castShadow = true;
+      group.add(centralPlaque);
+
+      const inset = new THREE.Mesh(
+        new THREE.BoxGeometry(1.65, 0.53, 0.08),
+        rng() > 0.5 ? materials.gold : materials.paintedTeal
+      );
+      inset.position.set(0, 5.22, 0.65);
+      group.add(inset);
+
+      for (const x of [-2.98, 0, 2.98]) {
+        const roof = new THREE.Mesh(
+          createGableRoofGeometry(x === 0 ? 3.1 : 2.85, 1.28, 0.58, 0.18),
+          materials.roof
+        );
+        roof.position.set(x, 5.55, 0);
+        roof.castShadow = true;
+        group.add(roof);
+      }
+
+      const carvingCount = Math.round(6 + config.decorationDensity * 8);
+      for (let i = 0; i < carvingCount; i += 1) {
+        const carving = new THREE.Mesh(
+          new THREE.BoxGeometry(randRange(rng, 0.12, 0.23), 0.22, 0.08),
+          materials.greySculpture
+        );
+        carving.position.set(
+          randRange(rng, -4.4, 4.4),
+          4.66,
+          0.48
+        );
+        group.add(carving);
+      }
+
+      group.userData.width = 10.2;
+      return group;
+    }
+
+    function housePart(material, position, scale, options = {}) {
+      return {
+        material,
+        position,
+        scale,
+        rotation: options.rotation ?? [0, 0, 0],
+        geometry: options.geometry ?? "box"
+      };
+    }
+
+    function addGableHouseParts(parts, options) {
+      const {
+        x = 0,
+        z = 0,
+        width,
+        depth,
+        wallHeight,
+        roofHeight,
+        baseY = 0,
+        rotationY = 0,
+        wallMaterial = "wall",
+        decorationDensity = 0.5,
+        door = false,
+        windows = true,
+        plinthHeight = 0.46
+      } = options;
+
+      const y0 = baseY + plinthHeight;
+      parts.push(
+        housePart("stone", [x, baseY + plinthHeight * 0.5, z], [width + 0.36, plinthHeight, depth + 0.36], {
+          rotation: [0, rotationY, 0]
+        }),
+        housePart(wallMaterial, [x, y0 + wallHeight * 0.5, z], [width, wallHeight, depth], {
+          rotation: [0, rotationY, 0]
+        }),
+        housePart("roof", [x, y0 + wallHeight, z], [width + 0.95, roofHeight, depth + 0.95], {
+          rotation: [0, rotationY, 0],
+          geometry: "roof"
+        }),
+        housePart("roofDark", [x, y0 + wallHeight + roofHeight, z], [width + 0.88, 0.12, 0.15], {
+          rotation: [0, rotationY, 0]
+        })
+      );
+
+      const front = new THREE.Vector3(0, 0, depth * 0.5 + 0.12);
+      front.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotationY);
+
+      if (door) {
+        const doorWidth = Math.min(1.5, width * 0.28);
+        const doorHeight = Math.min(2.03, wallHeight * 0.72);
+        const doorCenter = new THREE.Vector3(0, y0 + doorHeight * 0.5, depth * 0.5 + 0.15);
+        doorCenter.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotationY);
+        parts.push(
+          housePart("blackOpening", [x + doorCenter.x, doorCenter.y, z + doorCenter.z], [doorWidth, doorHeight, 0.16], {
+            rotation: [0, rotationY, 0]
+          }),
+          housePart("carvedWood", [
+            x + front.x - Math.cos(rotationY) * doorWidth * 0.5,
+            y0 + doorHeight * 0.5,
+            z + front.z + Math.sin(rotationY) * doorWidth * 0.5
+          ], [0.16, doorHeight + 0.28, 0.2], {
+            rotation: [0, rotationY, 0]
+          }),
+          housePart("carvedWood", [
+            x + front.x + Math.cos(rotationY) * doorWidth * 0.5,
+            y0 + doorHeight * 0.5,
+            z + front.z - Math.sin(rotationY) * doorWidth * 0.5
+          ], [0.16, doorHeight + 0.28, 0.2], {
+            rotation: [0, rotationY, 0]
+          }),
+          housePart("carvedWood", [
+            x + front.x,
+            y0 + doorHeight + 0.28,
+            z + front.z
+          ], [doorWidth + 0.55, 0.2, 0.22], {
+            rotation: [0, rotationY, 0]
+          })
+        );
+      }
+
+      if (windows) {
+        for (const side of [-1, 1]) {
+          const windowLocal = new THREE.Vector3(
+            side * width * 0.3,
+            y0 + wallHeight * 0.56,
+            depth * 0.5 + 0.12
+          );
+          windowLocal.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotationY);
+          parts.push(
+            housePart("blackOpening", [x + windowLocal.x, windowLocal.y, z + windowLocal.z], [0.86, 0.76, 0.12], {
+              rotation: [0, rotationY, 0]
+            }),
+            housePart("carvedWood", [x + windowLocal.x, windowLocal.y, z + windowLocal.z - 0.05], [1.0, 0.92, 0.1], {
+              rotation: [0, rotationY, 0]
+            })
+          );
+        }
+      }
+
+      if (decorationDensity > 0.62) {
+        const friezeLocal = new THREE.Vector3(0, y0 + wallHeight - 0.18, depth * 0.5 + 0.16);
+        friezeLocal.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotationY);
+        parts.push(
+          housePart(
+            decorationDensity > 0.8 ? "paintedTeal" : "paintedRed",
+            [x + friezeLocal.x, friezeLocal.y, z + friezeLocal.z],
+            [width * 0.86, 0.25, 0.13],
+            { rotation: [0, rotationY, 0] }
+          )
+        );
+      }
+    }
+
+    function createHouseSpec(type, rng, config) {
+      const parts = [];
+      if (type === "diantang") {
+        const width = randRange(rng, 11.2, 14);
+        const depth = randRange(rng, 8.8, 11.2);
+        const wingWidth = 2.7;
+        const wingDepth = depth * 0.6;
+
+        addGableHouseParts(parts, {
+          z: depth * 0.5 - 1.75,
+          width,
+          depth: 3.5,
+          wallHeight: 3.0,
+          roofHeight: 1.16,
+          wallMaterial: "wall",
+          decorationDensity: config.decorationDensity,
+          door: true
+        });
+        addGableHouseParts(parts, {
+          z: -depth * 0.5 + 2.05,
+          width: width * 0.82,
+          depth: 4.0,
+          wallHeight: 3.58,
+          roofHeight: 1.4,
+          wallMaterial: "wallSecondary",
+          decorationDensity: config.decorationDensity * 0.82,
+          door: false,
+          windows: true
+        });
+        for (const side of [-1, 1]) {
+          addGableHouseParts(parts, {
+            x: side * (width * 0.5 - wingWidth * 0.5),
+            width: wingWidth,
+            depth: wingDepth,
+            wallHeight: 2.82,
+            roofHeight: 0.94,
+            rotationY: Math.PI * 0.5,
+            wallMaterial: "wallSecondary",
+            decorationDensity: config.decorationDensity * 0.5,
+            door: false,
+            windows: false
+          });
+        }
+        parts.push(
+          housePart("cobble", [0, 0.14, 0], [width * 0.48, 0.12, depth * 0.4])
+        );
+        return {
+          type,
+          width,
+          depth,
+          radius: Math.max(width, depth) * 0.56,
+          parts
+        };
+      }
+
+      const width = randRange(rng, 7.4, 11.3);
+      const depth = randRange(rng, 4.2, 5.5);
+      const wallHeight = randRange(rng, 2.75, 3.3);
+      const roofHeight = randRange(rng, 1.05, 1.4);
+      const annex = rng() > 0.48 ? randRange(rng, 2.1, 3.5) : 0;
+      addGableHouseParts(parts, {
+        width,
+        depth,
+        wallHeight,
+        roofHeight,
+        wallMaterial: rng() > 0.58 ? "wall" : "wallSecondary",
+        decorationDensity: config.decorationDensity,
+        door: true
+      });
+
+      if (annex > 0) {
+        addGableHouseParts(parts, {
+          x: width * 0.5 + annex * 0.5 - 0.05,
+          width: annex,
+          depth: depth * 1.05,
+          wallHeight: wallHeight * 0.86,
+          roofHeight: 0.82,
+          wallMaterial: "wallSecondary",
+          decorationDensity: config.decorationDensity * 0.4,
+          door: false,
+          windows: false
+        });
+      }
+
+      return {
+        type,
+        width,
+        depth,
+        radius: annex > 0
+          ? Math.max(width * 0.5 + annex, depth * 0.5) * 0.92
+          : Math.max(width, depth) * 0.5,
+        parts
+      };
+    }
+
+    function buildInstancedHouseBatches(houseSpecs, materials) {
+      const group = new THREE.Group();
+      group.name = "instanced-houses";
+      const batches = new Map();
+
+      houseSpecs.forEach((house) => {
+        const houseMatrix = new THREE.Matrix4().compose(
+          new THREE.Vector3(house.x, house.y, house.z),
+          new THREE.Quaternion().setFromEuler(new THREE.Euler(0, house.yaw, 0)),
+          new THREE.Vector3(1, 1, 1)
+        );
+
+        house.spec.parts.forEach((part) => {
+          const key = `${part.geometry}:${part.material}`;
+          if (!batches.has(key)) {
+            batches.set(key, {
+              geometry: part.geometry,
+              material: part.material,
+              matrices: []
+            });
+          }
+          const localMatrix = new THREE.Matrix4().compose(
+            new THREE.Vector3().fromArray(part.position),
+            new THREE.Quaternion().setFromEuler(new THREE.Euler().fromArray(part.rotation)),
+            new THREE.Vector3().fromArray(part.scale)
+          );
+          const worldMatrix = new THREE.Matrix4().multiplyMatrices(houseMatrix, localMatrix);
+          batches.get(key).matrices.push(worldMatrix);
+        });
+      });
+
+      batches.forEach((batch, key) => {
+        const geometry = batch.geometry === "roof"
+          ? cachedGeometry(
+            "unit-gable-roof",
+            () => createGableRoofGeometry(1, 1, 1, 0)
+          )
+          : cachedGeometry(
+            "unit-box",
+            () => new THREE.BoxGeometry(1, 1, 1)
+          );
+        const material = materials[batch.material] ?? materials.wall;
+        const mesh = new THREE.InstancedMesh(
+          geometry,
+          material,
+          batch.matrices.length
+        );
+        batch.matrices.forEach((matrix, index) => mesh.setMatrixAt(index, matrix));
+        mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+        mesh.instanceMatrix.needsUpdate = true;
+        mesh.castShadow = !key.startsWith("box:blackOpening");
+        mesh.receiveShadow = true;
+        mesh.name = `house-batch-${key.replace(":", "-")}`;
+        mesh.computeBoundingSphere();
+        group.add(mesh);
+      });
+
+      return group;
+    }
+
+    function sampleNearRoad(rng, plan) {
+      const segment = choice(rng, plan.roads);
+      const t = randRange(rng, 0.08, 0.92);
+      const x = lerp(segment.x1, segment.x2, t);
+      const z = lerp(segment.z1, segment.z2, t);
+      const distance = randRange(rng, 8.5, 17.5);
+      const sign = rng() > 0.5 ? 1 : -1;
+      if (segment.axis === "x") {
+        return { x, z: z + sign * distance };
+      }
+      return { x: x + sign * distance, z };
+    }
+
+    function isInsideWorld(x, z, margin) {
+      return x > -WORLD.halfW + margin &&
+        x < WORLD.halfW - margin &&
+        z > -WORLD.halfD + margin &&
+        z < WORLD.halfD - margin;
+    }
+
+    function zoneDistance(x, z, zone) {
+      return Math.hypot(x - zone.x, z - zone.z) - zone.r;
+    }
+
+    function isZoneClear(x, z, radius, zones, ignoredType = "") {
+      return zones.every((zone) => {
+        if (zone.type === ignoredType) {
+          return true;
+        }
+        return zoneDistance(x, z, zone) >= radius;
+      });
+    }
+
+    function terrainSlope(heightAt, x, z, sample = 2.2) {
+      const center = heightAt(x, z);
+      return Math.max(
+        Math.abs(heightAt(x + sample, z) - center),
+        Math.abs(heightAt(x - sample, z) - center),
+        Math.abs(heightAt(x, z + sample) - center),
+        Math.abs(heightAt(x, z - sample) - center)
+      );
+    }
+
+    function placeHouses(config, plan, materials, rng, heightAt, reservedZones) {
+      const houses = [];
+      const claimed = [];
+      let attempts = 0;
+      const hardAttemptLimit = WORLD.maxPlacementAttempts;
+
+      function tryPlaceHouse(candidate, type, options = {}) {
+        if (attempts >= hardAttemptLimit || houses.length >= config.houseCountTarget) {
+          return false;
+        }
+        attempts += 1;
+
+        if (!isInsideWorld(candidate.x, candidate.z, 5.5)) {
+          return false;
+        }
+
+        const spec = createHouseSpec(type, rng, config);
+        const radius = spec.radius;
+        const nearest = nearestRoad(candidate.x, candidate.z, plan);
+        if (!nearest || nearest.distance < radius + (options.minRoadPadding ?? 2.1)) {
+          return false;
+        }
+
+        if (!isZoneClear(candidate.x, candidate.z, radius + 1.05, reservedZones)) {
+          return false;
+        }
+
+        for (const claimedHouse of claimed) {
+          const required = radius + claimedHouse.radius + WORLD.cell;
+          if (Math.hypot(candidate.x - claimedHouse.x, candidate.z - claimedHouse.z) < required) {
+            return false;
+          }
+        }
+
+        const slope = terrainSlope(heightAt, candidate.x, candidate.z);
+        if (!options.allowSteep && slope > 2.5 * config.terrainRelief) {
+          return false;
+        }
+
+        const roadDx = nearest.x - candidate.x;
+        const roadDz = nearest.z - candidate.z;
+        const record = {
+          object: null,
+          x: candidate.x,
+          z: candidate.z,
+          y: heightAt(candidate.x, candidate.z) + 0.04,
+          radius,
+          yaw: Math.atan2(roadDx, roadDz),
+          type,
+          spec,
+          external: false,
+          nearestRoadDistance: nearest.distance
+        };
+        houses.push(record);
+        claimed.push(record);
+        reservedZones.push({
+          x: candidate.x,
+          z: candidate.z,
+          r: radius + WORLD.cell,
+          type: "house"
+        });
+        return true;
+      }
+
+      const strictAttemptLimit = Math.min(3600, hardAttemptLimit);
+      while (houses.length < config.houseCountTarget && attempts < strictAttemptLimit) {
+        const candidate = sampleNearRoad(rng, plan);
+        const type = rng() > 0.36 ? "gangwu" : "diantang";
+        tryPlaceHouse(candidate, type);
+      }
+
+      // 保底规则：随机采样耗尽后，沿正交道路生成结构化候选点，
+      // 仍保留隔离、避让和门朝道路约束，只放宽地形坡度限制。
+      const fallbackTarget = Math.min(config.houseCountTarget, 6);
+      if (houses.length < fallbackTarget) {
+        const fallbackLimit = Math.min(
+          hardAttemptLimit,
+          Math.max(attempts + 1200, 2400)
+        );
+        for (let pass = 0; pass < 3 && houses.length < fallbackTarget && attempts < fallbackLimit; pass += 1) {
+          for (const segment of plan.allRoadSegments) {
+            if (houses.length >= fallbackTarget || attempts >= fallbackLimit) {
+              break;
+            }
+            const alongX = segment.axis === "x";
+            const length = Math.hypot(
+              segment.x2 - segment.x1,
+              segment.z2 - segment.z1
+            );
+            const steps = Math.max(3, Math.floor(length / 9));
+            for (let step = 0; step < steps; step += 1) {
+              const t = (step + 0.5) / steps;
+              const anchorX = lerp(segment.x1, segment.x2, t);
+              const anchorZ = lerp(segment.z1, segment.z2, t);
+              for (const side of [-1, 1]) {
+                const offset = 7.2 + pass * 2.8;
+                const candidate = alongX
+                  ? { x: anchorX, z: anchorZ + side * offset }
+                  : { x: anchorX + side * offset, z: anchorZ };
+                const type = (step + pass) % 5 === 0 ? "diantang" : "gangwu";
+                if (tryPlaceHouse(candidate, type, {
+                  allowSteep: true,
+                  minRoadPadding: 1.85
+                }) && houses.length >= fallbackTarget) {
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (houses.length === 0) {
+        console.warn("房屋保底生成失败，已保留围龙屋并继续生成其余图层。");
+      }
+
+      const houseBatch = buildInstancedHouseBatches(houses, materials);
+      worldRoot.add(houseBatch);
+      houses.forEach((house) => {
+        house.object = houseBatch;
+      });
+
+      return houses;
+    }
+
+    function createFarmPlot(width, depth, materials, rng) {
+      const group = new THREE.Group();
+      group.name = "farmland";
+
+      const soil = new THREE.Mesh(
+        new THREE.BoxGeometry(width, 0.2, depth),
+        materials.soil
+      );
+      soil.position.y = 0.08;
+      soil.receiveShadow = true;
+      group.add(soil);
+
+      const rowCount = Math.max(3, Math.floor(depth / 0.78));
+      const cropGeometry = cachedGeometry(
+        "rice-crop",
+        () => new THREE.ConeGeometry(0.12, 0.54, 5)
+      );
+      const perRow = Math.max(3, Math.floor(width / 0.7));
+      const crops = new THREE.InstancedMesh(
+        cropGeometry,
+        materials.crop,
+        rowCount * perRow
+      );
+      const matrix = new THREE.Matrix4();
+      const quaternion = new THREE.Quaternion();
+      const scale = new THREE.Vector3();
+      const position = new THREE.Vector3();
+      let index = 0;
+
+      for (let row = 0; row < rowCount; row += 1) {
+        const z = -depth * 0.5 + (row + 0.5) * depth / rowCount;
+        for (let column = 0; column < perRow; column += 1) {
+          const x = -width * 0.5 + (column + 0.5) * width / perRow;
+          position.set(
+            x + (rng() - 0.5) * 0.12,
+            0.45,
+            z + (rng() - 0.5) * 0.1
+          );
+          scale.set(
+            randRange(rng, 0.72, 1.12),
+            randRange(rng, 0.8, 1.3),
+            randRange(rng, 0.72, 1.12)
+          );
+          matrix.compose(position, quaternion, scale);
+          crops.setMatrixAt(index, matrix);
+          index += 1;
+        }
+      }
+      crops.castShadow = true;
+      group.add(crops);
+
+      return group;
+    }
+
+    function buildInstancedFarmBatches(farms, materials, rng) {
+      const group = new THREE.Group();
+      group.name = "instanced-farmland";
+      let cropTotal = 0;
+      let rowTotal = 0;
+      farms.forEach((farm) => {
+        farm.rowCount = Math.max(3, Math.floor(farm.depth / 0.78));
+        farm.perRow = Math.max(3, Math.floor(farm.width / 0.7));
+        cropTotal += farm.rowCount * farm.perRow;
+        rowTotal += farm.rowCount;
+      });
+
+      const soil = new THREE.InstancedMesh(
+        cachedGeometry("unit-box", () => new THREE.BoxGeometry(1, 1, 1)),
+        materials.soil,
+        farms.length
+      );
+      const rows = new THREE.InstancedMesh(
+        cachedGeometry("farm-row-guide", () => new THREE.BoxGeometry(1, 0.025, 1)),
+        materials.roadEdge,
+        rowTotal
+      );
+      const crops = new THREE.InstancedMesh(
+        cachedGeometry(
+          "rice-crop",
+          () => new THREE.ConeGeometry(0.12, 0.54, 5)
+        ),
+        materials.crop,
+        cropTotal
+      );
+
+      const matrix = new THREE.Matrix4();
+      const quaternion = new THREE.Quaternion();
+      const position = new THREE.Vector3();
+      const scale = new THREE.Vector3();
+      const color = new THREE.Color();
+      let cropIndex = 0;
+      let rowIndex = 0;
+
+      farms.forEach((farm) => {
+        quaternion.setFromEuler(new THREE.Euler(0, farm.yaw, 0));
+        position.set(farm.x, farm.y + 0.08, farm.z);
+        scale.set(farm.width, 0.2, farm.depth);
+        matrix.compose(position, quaternion, scale);
+        soil.setMatrixAt(farms.indexOf(farm), matrix);
+
+        for (let row = 0; row < farm.rowCount; row += 1) {
+          const localZ = -farm.depth * 0.5 + (row + 0.5) * farm.depth / farm.rowCount;
+          const world = new THREE.Vector3(0, 0, localZ)
+            .applyAxisAngle(new THREE.Vector3(0, 1, 0), farm.yaw);
+          position.set(farm.x + world.x, farm.y + 0.2, farm.z + world.z);
+          scale.set(farm.width * 0.94, 1, 0.055);
+          matrix.compose(position, quaternion, scale);
+          rows.setMatrixAt(rowIndex, matrix);
+          rowIndex += 1;
+
+          for (let column = 0; column < farm.perRow; column += 1) {
+            const localX = -farm.width * 0.5 + (column + 0.5) * farm.width / farm.perRow;
+            const cropWorld = new THREE.Vector3(
+              localX + (rng() - 0.5) * 0.1,
+              0,
+              localZ + (rng() - 0.5) * 0.08
+            ).applyAxisAngle(new THREE.Vector3(0, 1, 0), farm.yaw);
+            position.set(
+              farm.x + cropWorld.x,
+              farm.y + 0.45,
+              farm.z + cropWorld.z
+            );
+            scale.set(
+              randRange(rng, 0.72, 1.12),
+              randRange(rng, 0.8, 1.3),
+              randRange(rng, 0.72, 1.12)
+            );
+            matrix.compose(position, quaternion, scale);
+            crops.setMatrixAt(cropIndex, matrix);
+            color.setHSL(
+              randRange(rng, 0.18, 0.25),
+              randRange(rng, 0.42, 0.62),
+              randRange(rng, 0.34, 0.5)
+            );
+            crops.setColorAt(cropIndex, color);
+            cropIndex += 1;
+          }
+        }
+      });
+
+      [soil, rows, crops].forEach((mesh) => {
+        mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+        mesh.instanceMatrix.needsUpdate = true;
+        mesh.receiveShadow = true;
+        mesh.computeBoundingSphere();
+      });
+      if (crops.instanceColor) {
+        crops.instanceColor.needsUpdate = true;
+      }
+      soil.castShadow = true;
+      crops.castShadow = true;
+      group.add(soil, rows, crops);
+      return group;
+    }
+
+    function nearestHouse(x, z, houses) {
+      let best = null;
+      for (const house of houses) {
+        const distance = Math.hypot(x - house.x, z - house.z);
+        if (!best || distance < best.distance) {
+          best = { house, distance };
+        }
+      }
+      return best;
+    }
+
+    function placeFarms(config, plan, houses, materials, rng, heightAt, reservedZones) {
+      const farms = [];
+      let attempts = 0;
+
+      while (farms.length < config.farmCountTarget && attempts < WORLD.maxPlacementAttempts) {
+        attempts += 1;
+        const anchorType = choice(rng, ["road", "water", "house"]);
+        let center;
+        let reason = "";
+        let nearDistance = 0;
+
+        if (anchorType === "road") {
+          const nearRoad = sampleNearRoad(rng, plan);
+          center = {
+            x: nearRoad.x + randRange(rng, -3.5, 3.5),
+            z: nearRoad.z + randRange(rng, -3.5, 3.5)
+          };
+          const nearest = nearestRoad(center.x, center.z, plan);
+          nearDistance = nearest?.distance ?? Infinity;
+          reason = `近路 ${nearDistance.toFixed(1)}m`;
+        } else if (anchorType === "water") {
+          const x = randRange(rng, -WORLD.halfW + 10, WORLD.halfW - 10);
+          const side = rng() > 0.5 ? 1 : -1;
+          const z = plan.riverZ + side * randRange(rng, plan.riverWidth * 0.5 + 4.5, plan.riverWidth * 0.5 + 15);
+          center = { x, z };
+          nearDistance = Math.abs(z - plan.riverZ);
+          reason = `近水 ${nearDistance.toFixed(1)}m`;
+        } else {
+          if (houses.length === 0) {
+            continue;
+          }
+          const house = choice(rng, houses);
+          const angle = rng() * Math.PI * 2;
+          const distance = randRange(rng, house.radius + 5.5, house.radius + 11.5);
+          center = {
+            x: house.x + Math.cos(angle) * distance,
+            z: house.z + Math.sin(angle) * distance
+          };
+          nearDistance = distance;
+          reason = `近宅 ${nearDistance.toFixed(1)}m`;
+        }
+
+        const width = randRange(rng, 5.4, 10.5);
+        const depth = randRange(rng, 4.2, 8.3);
+        const radius = Math.hypot(width, depth) * 0.5;
+        if (!isInsideWorld(center.x, center.z, radius + 4)) {
+          continue;
+        }
+        if (!isZoneClear(center.x, center.z, radius + 0.7, reservedZones)) {
+          continue;
+        }
+
+        const roadDistance = nearestRoad(center.x, center.z, plan)?.distance ?? Infinity;
+        const waterDistance = Math.abs(center.z - plan.riverZ);
+        const houseDistance = nearestHouse(center.x, center.z, houses)?.distance ?? Infinity;
+        const satisfiesRule =
+          roadDistance <= 18 ||
+          waterDistance <= plan.riverWidth * 0.5 + 17 ||
+          houseDistance <= 22;
+        if (!satisfiesRule || terrainSlope(heightAt, center.x, center.z) > 2.25 * config.terrainRelief) {
+          continue;
+        }
+
+        farms.push({
+          object: null,
+          x: center.x,
+          z: center.z,
+          y: heightAt(center.x, center.z) + 0.03,
+          width,
+          depth,
+          radius,
+          yaw: rng() > 0.5 ? Math.PI * 0.5 : 0,
+          reason,
+          roadDistance,
+          waterDistance,
+          houseDistance
+        });
+        reservedZones.push({
+          x: center.x,
+          z: center.z,
+          r: radius + 0.4,
+          type: "farm"
+        });
+      }
+
+      // 农田保底：若随机采样不足，沿道路两侧以固定间距补足，
+      // 仍满足“近路、近水或近宅”至少一项。
+      const fallbackTarget = Math.min(config.farmCountTarget, 4);
+      if (farms.length < fallbackTarget) {
+        for (const segment of plan.allRoadSegments) {
+          if (farms.length >= fallbackTarget || attempts >= WORLD.maxPlacementAttempts) {
+            break;
+          }
+          const alongX = segment.axis === "x";
+          const length = Math.hypot(
+            segment.x2 - segment.x1,
+            segment.z2 - segment.z1
+          );
+          const steps = Math.max(3, Math.floor(length / 11));
+          for (let step = 0; step < steps; step += 1) {
+            for (const side of [-1, 1]) {
+              for (const offset of [7.5, 12.5]) {
+                if (farms.length >= fallbackTarget || attempts >= WORLD.maxPlacementAttempts) {
+                  break;
+                }
+                attempts += 1;
+                const t = (step + 0.5) / steps;
+                const anchorX = lerp(segment.x1, segment.x2, t);
+                const anchorZ = lerp(segment.z1, segment.z2, t);
+                const center = alongX
+                  ? { x: anchorX, z: anchorZ + side * offset }
+                  : { x: anchorX + side * offset, z: anchorZ };
+                const width = randRange(rng, 4.8, 7.6);
+                const depth = randRange(rng, 3.8, 6.2);
+                const radius = Math.hypot(width, depth) * 0.5;
+                if (!isInsideWorld(center.x, center.z, radius + 3)) {
+                  continue;
+                }
+                if (!isZoneClear(center.x, center.z, radius + 0.55, reservedZones)) {
+                  continue;
+                }
+                const roadDistance = nearestRoad(center.x, center.z, plan)?.distance ?? Infinity;
+                const waterDistance = Math.abs(center.z - plan.riverZ);
+                const houseDistance = nearestHouse(center.x, center.z, houses)?.distance ?? Infinity;
+                if (
+                  roadDistance > 19 &&
+                  waterDistance > plan.riverWidth * 0.5 + 18 &&
+                  houseDistance > 23
+                ) {
+                  continue;
+                }
+                farms.push({
+                  object: null,
+                  x: center.x,
+                  z: center.z,
+                  y: heightAt(center.x, center.z) + 0.03,
+                  width,
+                  depth,
+                  radius,
+                  yaw: alongX ? 0 : Math.PI * 0.5,
+                  reason: `保底近路 ${roadDistance.toFixed(1)}m`,
+                  roadDistance,
+                  waterDistance,
+                  houseDistance
+                });
+                reservedZones.push({
+                  x: center.x,
+                  z: center.z,
+                  r: radius + 0.4,
+                  type: "farm"
+                });
+              }
+            }
+          }
+        }
+      }
+
+      const farmBatch = buildInstancedFarmBatches(farms, materials, rng);
+      worldRoot.add(farmBatch);
+      farms.forEach((farm) => {
+        farm.object = farmBatch;
+      });
+
+      return farms;
+    }
+
+    function findPagodaSite(plan, config, rng, heightAt, zones) {
+      let best = null;
+      let bestScore = -Infinity;
+
+      for (let i = 0; i < WORLD.maxPlacementAttempts; i += 1) {
+        const x = randRange(rng, -WORLD.halfW + 12, WORLD.halfW - 12);
+        const z = randRange(rng, -WORLD.halfD + 11, WORLD.halfD - 11);
+        if (!isZoneClear(x, z, 6.2, zones)) {
+          continue;
+        }
+        const road = nearestRoad(x, z, plan);
+        if (!road || road.distance < 6.8) {
+          continue;
+        }
+        const riverDistance = Math.abs(z - plan.riverZ);
+        if (riverDistance < plan.riverWidth * 0.5 + 5.5) {
+          continue;
+        }
+
+        const tulouDistance = Math.hypot(x - config.tulouX, z - config.tulouZ);
+        const eastBias = (x + WORLD.halfW) / WORLD.width;
+        const ridgeBias = clamp((-z + WORLD.halfD) / WORLD.depth, 0, 1);
+        const score =
+          Math.min(tulouDistance, 52) * 0.7 +
+          eastBias * 18 +
+          ridgeBias * 12 +
+          rng() * 8;
+        if (score > bestScore) {
+          bestScore = score;
+          best = { x, z, score };
+        }
+      }
+
+      return best;
+    }
+
+    function createPagodaZone(plan, config, materials, rng, heightAt, zones) {
+      const site = findPagodaSite(plan, config, rng, heightAt, zones) ?? {
+        x: WORLD.halfW - 18,
+        z: -WORLD.halfD + 18,
+        score: 0
+      };
+
+      const pagoda = createPagoda(config, materials, rng, heightAt);
+      pagoda.position.set(site.x, heightAt(site.x, site.z) + 0.03, site.z);
+      pagoda.rotation.y = rng() * Math.PI * 2;
+      worldRoot.add(pagoda);
+
+      zones.push({
+        x: site.x,
+        z: site.z,
+        r: 16 * WORLD.cell,
+        type: "pagoda-clear"
+      });
+
+      return {
+        object: pagoda,
+        x: site.x,
+        z: site.z,
+        requiredDistance: 16 * WORLD.cell,
+        external: Boolean(pagoda.userData.isExternal),
+        height: pagoda.userData.height ?? 11
+      };
+    }
+
+    function createTree(materials, rng, seedValue) {
+      const local = mulberry32(seedValue);
+      const kindRoll = local();
+      const group = new THREE.Group();
+      group.name = "tree";
+
+      if (kindRoll < 0.42) {
+        const trunk = new THREE.Mesh(
+          cachedGeometry("tree-trunk", () => new THREE.CylinderGeometry(0.18, 0.29, 2.5, 7)),
+          materials.trunk
+        );
+        trunk.position.y = 1.25;
+        trunk.castShadow = true;
+        group.add(trunk);
+
+        const crownGeometry = cachedGeometry(
+          "broadleaf-crown",
+          () => new THREE.DodecahedronGeometry(1.25, 1)
+        );
+        const crownCount = randInt(local, 3, 5);
+        for (let i = 0; i < crownCount; i += 1) {
+          const crown = new THREE.Mesh(crownGeometry, i % 2 === 0 ? materials.leafA : materials.leafB);
+          const angle = i / crownCount * Math.PI * 2;
+          crown.position.set(
+            Math.cos(angle) * randRange(local, 0.35, 0.85),
+            2.75 + randRange(local, -0.35, 0.75),
+            Math.sin(angle) * randRange(local, 0.35, 0.85)
+          );
+          crown.scale.set(
+            randRange(local, 0.68, 1.18),
+            randRange(local, 0.65, 1.25),
+            randRange(local, 0.68, 1.18)
+          );
+          crown.castShadow = true;
+          group.add(crown);
+        }
+      } else if (kindRoll < 0.72) {
+        const trunk = new THREE.Mesh(
+          cachedGeometry("tree-trunk", () => new THREE.CylinderGeometry(0.18, 0.29, 2.5, 7)),
+          materials.trunk
+        );
+        trunk.position.y = 1.25;
+        trunk.castShadow = true;
+        group.add(trunk);
+
+        const pineGeometry = cachedGeometry(
+          "pine-crown",
+          () => new THREE.ConeGeometry(1.28, 2.15, 8)
+        );
+        for (let i = 0; i < 3; i += 1) {
+          const crown = new THREE.Mesh(pineGeometry, materials.leafA);
+          crown.position.y = 2.15 + i * 1.05;
+          crown.scale.setScalar(1 - i * 0.18);
+          crown.castShadow = true;
+          group.add(crown);
+        }
+      } else {
+        const trunkGeometry = cachedGeometry(
+          "bamboo-stalk",
+          () => new THREE.CylinderGeometry(0.07, 0.1, 4.6, 6)
+        );
+        const leafGeometry = cachedGeometry(
+          "bamboo-leaf",
+          () => new THREE.OctahedronGeometry(0.62, 0)
+        );
+        const stalkCount = randInt(local, 4, 7);
+        for (let i = 0; i < stalkCount; i += 1) {
+          const stalk = new THREE.Mesh(trunkGeometry, materials.bamboo);
+          stalk.position.set(
+            randRange(local, -0.55, 0.55),
+            2.3,
+            randRange(local, -0.55, 0.55)
+          );
+          stalk.rotation.z = randRange(local, -0.08, 0.08);
+          stalk.castShadow = true;
+          group.add(stalk);
+
+          const leaves = new THREE.Mesh(leafGeometry, materials.leafB);
+          leaves.position.set(stalk.position.x, 4.25, stalk.position.z);
+          leaves.scale.set(0.7, 0.38, 0.7);
+          leaves.castShadow = true;
+          group.add(leaves);
+        }
+      }
+
+      return group;
+    }
+
+    function buildInstancedTreeBatches(placements, materials, heightAt) {
+      const group = new THREE.Group();
+      group.name = "instanced-trees";
+      const batches = new Map();
+      const addInstance = (key, geometryFactory, material, matrix, castShadow = true) => {
+        if (!batches.has(key)) {
+          batches.set(key, {
+            geometry: geometryFactory(),
+            material,
+            matrices: [],
+            castShadow
+          });
+        }
+        batches.get(key).matrices.push(matrix);
+      };
+
+      const rootPosition = new THREE.Vector3();
+      const rootQuaternion = new THREE.Quaternion();
+      const rootScale = new THREE.Vector3();
+      const localPosition = new THREE.Vector3();
+      const localQuaternion = new THREE.Quaternion();
+      const localScale = new THREE.Vector3();
+      const rootMatrix = new THREE.Matrix4();
+      const localMatrix = new THREE.Matrix4();
+      const worldMatrix = new THREE.Matrix4();
+
+      placements.forEach((placement) => {
+        const groundY = heightAt(placement.x, placement.z) + 0.02;
+        rootPosition.set(placement.x, groundY, placement.z);
+        rootQuaternion.setFromEuler(new THREE.Euler(0, placement.rotation, 0));
+        rootScale.setScalar(placement.scale);
+        rootMatrix.compose(rootPosition, rootQuaternion, rootScale);
+
+        const addLocal = (key, geometryFactory, material, position, scale, rotation = [0, 0, 0], castShadow = true) => {
+          localPosition.fromArray(position);
+          localQuaternion.setFromEuler(new THREE.Euler().fromArray(rotation));
+          localScale.fromArray(scale);
+          localMatrix.compose(localPosition, localQuaternion, localScale);
+          worldMatrix.multiplyMatrices(rootMatrix, localMatrix);
+          addInstance(key, geometryFactory, material, worldMatrix.clone(), castShadow);
+        };
+
+        if (placement.kind === "conifer") {
+          addLocal(
+            "tree-conifer-trunk",
+            () => new THREE.CylinderGeometry(0.16, 0.26, 2.4, 7),
+            materials.trunk,
+            [0, 1.2, 0],
+            [1, 1, 1]
+          );
+          addLocal(
+            "tree-conifer-crown-a",
+            () => new THREE.ConeGeometry(1.34, 2.25, 8),
+            materials.leafA,
+            [0, 2.55, 0],
+            [1, 1, 1]
+          );
+          addLocal(
+            "tree-conifer-crown-b",
+            () => new THREE.ConeGeometry(1.12, 1.88, 8),
+            materials.leafB,
+            [0, 3.56, 0],
+            [1, 1, 1]
+          );
+          addLocal(
+            "tree-conifer-crown-c",
+            () => new THREE.ConeGeometry(0.88, 1.5, 8),
+            materials.leafA,
+            [0, 4.42, 0],
+            [1, 1, 1]
+          );
+        } else if (placement.kind === "bamboo") {
+          const stalkCount = 4 + (placement.seed % 4);
+          for (let i = 0; i < stalkCount; i += 1) {
+            const angle = i / stalkCount * Math.PI * 2 + placement.rotation;
+            const radial = 0.22 + (i % 2) * 0.24;
+            addLocal(
+              "tree-bamboo-stalk",
+              () => new THREE.CylinderGeometry(0.065, 0.09, 4.6, 6),
+              materials.bamboo,
+              [Math.cos(angle) * radial, 2.3, Math.sin(angle) * radial],
+              [1, randRange(mulberry32(placement.seed + i), 0.86, 1.12), 1],
+              [0, 0, randRange(mulberry32(placement.seed + i * 11), -0.07, 0.07)],
+              i % 2 === 0
+            );
+            addLocal(
+              "tree-bamboo-leaf",
+              () => new THREE.OctahedronGeometry(0.68, 0),
+              materials.leafB,
+              [Math.cos(angle) * radial, 4.28, Math.sin(angle) * radial],
+              [0.82, 0.34, 0.82],
+              [0, angle, 0],
+              false
+            );
+          }
+        } else {
+          addLocal(
+            "tree-broadleaf-trunk",
+            () => new THREE.CylinderGeometry(0.2, 0.32, 2.6, 7),
+            materials.trunk,
+            [0, 1.3, 0],
+            [1, 1, 1]
+          );
+          const crownCount = 3 + (placement.seed % 3);
+          for (let i = 0; i < crownCount; i += 1) {
+            const angle = i / crownCount * Math.PI * 2 + placement.rotation;
+            addLocal(
+              i % 2 === 0 ? "tree-broadleaf-crown-a" : "tree-broadleaf-crown-b",
+              () => new THREE.DodecahedronGeometry(1.22, 1),
+              i % 2 === 0 ? materials.leafA : materials.leafB,
+              [
+                Math.cos(angle) * 0.72,
+                2.95 + Math.sin(i * 1.7) * 0.35,
+                Math.sin(angle) * 0.72
+              ],
+              [1, 0.92 + (i % 2) * 0.16, 1],
+              [0, angle, 0]
+            );
+          }
+        }
+      });
+
+      batches.forEach((batch, key) => {
+        const mesh = new THREE.InstancedMesh(
+          batch.geometry,
+          batch.material,
+          batch.matrices.length
+        );
+        batch.matrices.forEach((matrix, index) => mesh.setMatrixAt(index, matrix));
+        mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+        mesh.instanceMatrix.needsUpdate = true;
+        mesh.castShadow = batch.castShadow;
+        mesh.receiveShadow = true;
+        mesh.name = `tree-batch-${key}`;
+        mesh.computeBoundingSphere();
+        group.add(mesh);
+      });
+
+      return group;
+    }
+
+    // =========================================================
+    // 04 植被与农田模块：全部使用 InstancedMesh 批处理
+    // =========================================================
+
+    function createTreeClusters(rng, plan) {
+      const clusters = [];
+      const count = randInt(rng, 7, 11);
+      for (let i = 0; i < count; i += 1) {
+        if (rng() > 0.55) {
+          clusters.push({
+            x: randRange(rng, -WORLD.halfW + 6, WORLD.halfW - 6),
+            z: rng() > 0.5
+              ? randRange(rng, plan.riverZ + plan.riverWidth * 0.65, plan.riverZ + plan.riverWidth * 0.65 + 13)
+              : randRange(rng, -WORLD.halfD + 5, -WORLD.halfD + 29),
+            radius: randRange(rng, 7, 15)
+          });
+        } else {
+          clusters.push({
+            x: rng() > 0.5
+              ? randRange(rng, -WORLD.halfW + 5, -WORLD.halfW + 24)
+              : randRange(rng, WORLD.halfW - 24, WORLD.halfW - 5),
+            z: randRange(rng, -WORLD.halfD + 8, WORLD.halfD - 8),
+            radius: randRange(rng, 7, 14)
+          });
+        }
+      }
+      return clusters;
+    }
+
+    function pointInAnyZone(x, z, radius, zones, allowedTypes = []) {
+      return zones.some((zone) => {
+        if (allowedTypes.includes(zone.type)) {
+          return false;
+        }
+        return Math.hypot(x - zone.x, z - zone.z) < zone.r + radius;
+      });
+    }
+
+    function createVegetation(config, plan, materials, rng, heightAt, zones, tulouArea) {
+      const clusterCenters = createTreeClusters(rng, plan);
+      const placements = [];
+      let attempts = 0;
+
+      function testPlacement(x, z, mode) {
+        if (!isInsideWorld(x, z, 3.2)) {
+          return false;
+        }
+        const roadDistance = nearestRoad(x, z, plan)?.distance ?? Infinity;
+        if (roadDistance < 3.6) {
+          return false;
+        }
+        const riverDistance = Math.abs(z - plan.riverZ);
+        if (riverDistance < plan.riverWidth * 0.5 + 1.8) {
+          return false;
+        }
+        if (pointInAnyZone(x, z, 1.3, zones)) {
+          return false;
+        }
+        placements.push({
+          x,
+          z,
+          mode,
+          scale: randRange(rng, mode === "forest" ? 0.86 : 0.65, mode === "forest" ? 1.38 : 1.18),
+          rotation: rng() * Math.PI * 2,
+          seed: Math.floor(rng() * 0xffffffff),
+          kind: rng() < 0.5 ? "broadleaf" : (rng() < 0.62 ? "conifer" : "bamboo")
+        });
+        return true;
+      }
+
+      const randomAttemptLimit = Math.min(3600, WORLD.maxPlacementAttempts);
+      while (placements.length < config.treeCountTarget && attempts < randomAttemptLimit) {
+        attempts += 1;
+        const modeRoll = rng();
+        let x;
+        let z;
+        let mode;
+
+        if (modeRoll < 0.26) {
+          mode = "bank";
+          x = randRange(rng, -WORLD.halfW + 5, WORLD.halfW - 5);
+          const side = rng() > 0.5 ? 1 : -1;
+          z = plan.riverZ + side * randRange(rng, plan.riverWidth * 0.5 + 2.2, plan.riverWidth * 0.5 + 12);
+        } else if (modeRoll < 0.53) {
+          mode = "edge";
+          if (rng() > 0.5) {
+            x = rng() > 0.5
+              ? randRange(rng, -WORLD.halfW + 3.5, -WORLD.halfW + 18)
+              : randRange(rng, WORLD.halfW - 18, WORLD.halfW - 3.5);
+            z = randRange(rng, -WORLD.halfD + 4, WORLD.halfD - 4);
+          } else {
+            x = randRange(rng, -WORLD.halfW + 4, WORLD.halfW - 4);
+            z = rng() > 0.5
+              ? randRange(rng, -WORLD.halfD + 3.5, -WORLD.halfD + 17)
+              : randRange(rng, WORLD.halfD - 17, WORLD.halfD - 3.5);
+          }
+        } else {
+          mode = "cluster";
+          const cluster = choice(rng, clusterCenters);
+          const angle = rng() * Math.PI * 2;
+          const radius = Math.sqrt(rng()) * cluster.radius;
+          x = cluster.x + Math.cos(angle) * radius;
+          z = cluster.z + Math.sin(angle) * radius;
+        }
+
+        if (rng() < (mode === "cluster" ? 0.94 : 0.78)) {
+          testPlacement(x, z, mode);
+        }
+      }
+
+      // 植被保底：为验证规则要求的三种分布各保留最低数量。
+      const minimumModeCounts = { bank: 8, edge: 12, cluster: 14 };
+      const modeCount = (mode) => placements.reduce(
+        (count, placement) => count + (placement.mode === mode ? 1 : 0),
+        0
+      );
+      const fillVegetationMode = (mode, factory) => {
+        let guard = 0;
+        while (
+          modeCount(mode) < minimumModeCounts[mode] &&
+          attempts < WORLD.maxPlacementAttempts &&
+          guard < 900
+        ) {
+          guard += 1;
+          attempts += 1;
+          const candidate = factory();
+          testPlacement(candidate.x, candidate.z, mode);
+        }
+      };
+
+      fillVegetationMode("bank", () => ({
+        x: randRange(rng, -WORLD.halfW + 5, WORLD.halfW - 5),
+        z: plan.riverZ + (rng() > 0.5 ? 1 : -1) *
+          randRange(rng, plan.riverWidth * 0.5 + 2.2, plan.riverWidth * 0.5 + 11)
+      }));
+      fillVegetationMode("edge", () => {
+        if (rng() > 0.5) {
+          return {
+            x: rng() > 0.5
+              ? randRange(rng, -WORLD.halfW + 3.5, -WORLD.halfW + 17)
+              : randRange(rng, WORLD.halfW - 17, WORLD.halfW - 3.5),
+            z: randRange(rng, -WORLD.halfD + 4, WORLD.halfD - 4)
+          };
+        }
+        return {
+          x: randRange(rng, -WORLD.halfW + 4, WORLD.halfW - 4),
+          z: rng() > 0.5
+            ? randRange(rng, -WORLD.halfD + 3.5, -WORLD.halfD + 16)
+            : randRange(rng, WORLD.halfD - 16, WORLD.halfD - 3.5)
+        };
+      });
+      fillVegetationMode("cluster", () => {
+        const cluster = choice(rng, clusterCenters);
+        const angle = rng() * Math.PI * 2;
+        const radius = Math.sqrt(rng()) * cluster.radius;
+        return {
+          x: cluster.x + Math.cos(angle) * radius,
+          z: cluster.z + Math.sin(angle) * radius
+        };
+      });
+
+      const fengshuiCount = randInt(rng, 22, 34);
+      let forestPlaced = 0;
+      let forestAttempts = 0;
+      while (forestPlaced < fengshuiCount && forestAttempts < 900) {
+        forestAttempts += 1;
+        const theta = Math.PI + rng() * Math.PI;
+        const radius = randRange(rng, config.radius * 0.42, config.radius + 10.5);
+        const x = tulouArea.forestCenter.x + Math.cos(theta) * radius;
+        const z = tulouArea.forestCenter.z - Math.sin(theta) * radius * 0.45;
+        if (testPlacement(x, z, "forest")) {
+          forestPlaced += 1;
+        }
+      }
+
+      const treeBatch = buildInstancedTreeBatches(placements, materials, heightAt);
+      worldRoot.add(treeBatch);
+      const trees = placements.map((placement) => ({
+        object: treeBatch,
+        x: placement.x,
+        z: placement.z,
+        mode: placement.mode,
+        kind: placement.kind
+      }));
+
+      return { trees, clusterCenters };
+    }
+
+    function placePaifangs(plan, config, materials, rng, heightAt) {
+      const paifangs = [];
+      const endPositions = [
+        { x: plan.mainRoadX, z: -WORLD.halfD + 2.3, label: "北端" },
+        { x: plan.mainRoadX, z: WORLD.halfD - 2.3, label: "南端" }
+      ];
+
+      endPositions.forEach((position) => {
+        const included = rng() < 0.85;
+        if (!included) {
+          paifangs.push({
+            ...position,
+            included: false,
+            object: null
+          });
+          return;
+        }
+
+        const paifang = createPaifang(materials, rng, config);
+        paifang.position.set(position.x, heightAt(position.x, position.z) + 0.02, position.z);
+        paifang.rotation.y = 0;
+        worldRoot.add(paifang);
+        paifangs.push({
+          ...position,
+          included: true,
+          object: paifang
+        });
+      });
+
+      return paifangs;
+    }
+
+    function validateMap(data) {
+      const checks = [];
+      const roads = [...data.plan.roads, data.plan.bridgeRoad];
+      const roadRiverOrthogonal = roads.every(axisAligned) &&
+        data.plan.crossings.every(({ river, road }) => {
+          const riverHorizontal = Math.abs(river.x2 - river.x1) > Math.abs(river.z - river.z);
+          const roadVertical = Math.abs(road.z2 - road.z1) > Math.abs(road.x2 - road.x1);
+          return riverHorizontal && roadVertical;
+        });
+      checks.push({ label: "河路正交", pass: roadRiverOrthogonal });
+
+      const waterfrontStraight = roads
+        .filter((road) => road.kind === "waterfront" || nearestPointOnSegment(
+          road.x1,
+          road.z1,
+          data.plan.river
+        ).distance < 28)
+        .every(axisAligned);
+      checks.push({ label: "近水锁直", pass: waterfrontStraight });
+
+      let houseSeparation = true;
+      for (let i = 0; i < data.houses.length; i += 1) {
+        for (let j = i + 1; j < data.houses.length; j += 1) {
+          const a = data.houses[i];
+          const b = data.houses[j];
+          if (Math.hypot(a.x - b.x, a.z - b.z) < a.radius + b.radius + WORLD.cell - 0.001) {
+            houseSeparation = false;
+          }
+        }
+      }
+      checks.push({ label: "房屋隔离", pass: houseSeparation && data.houses.length > 0 });
+
+      const doorsFaceRoads = data.houses.every((house) => {
+        const nearest = nearestRoad(house.x, house.z, data.plan);
+        if (!nearest) {
+          return false;
+        }
+        const doorX = Math.sin(house.yaw);
+        const doorZ = Math.cos(house.yaw);
+        const toRoadLength = Math.max(nearest.distance, 0.001);
+        const toRoadX = (nearest.x - house.x) / toRoadLength;
+        const toRoadZ = (nearest.z - house.z) / toRoadLength;
+        return doorX * toRoadX + doorZ * toRoadZ > 0.94;
+      });
+      checks.push({ label: "门朝道路", pass: doorsFaceRoads });
+
+      const farmsNearAnchor = data.farms.length > 0 && data.farms.every((farm) =>
+        farm.roadDistance <= 18 ||
+        farm.waterDistance <= data.plan.riverWidth * 0.5 + 17 ||
+        farm.houseDistance <= 22
+      );
+      checks.push({ label: "农田近宅路水", pass: farmsNearAnchor });
+
+      const pagodaDistance = data.houses.every((house) =>
+        Math.hypot(house.x - data.pagoda.x, house.z - data.pagoda.z) >= data.pagoda.requiredDistance - 0.001
+      );
+      checks.push({ label: "宝塔十六格", pass: pagodaDistance });
+
+      const paifangProbability = data.paifangs.length === 2 &&
+        data.paifangs.every((item) => typeof item.included === "boolean");
+      checks.push({ label: "牌坊八五概率", pass: paifangProbability });
+
+      const vegetationCounts = data.vegetation.trees.reduce(
+        (counts, tree) => {
+          counts[tree.mode] = (counts[tree.mode] ?? 0) + 1;
+          return counts;
+        },
+        {}
+      );
+      const vegetationDensity =
+        (vegetationCounts.bank ?? 0) >= 4 &&
+        (vegetationCounts.edge ?? 0) >= 7 &&
+        (vegetationCounts.cluster ?? 0) >= 6 &&
+        (vegetationCounts.forest ?? 0) >= 12;
+      checks.push({ label: "植被加密", pass: vegetationDensity });
+
+      return {
+        checks,
+        allPass: checks.every((check) => check.pass),
+        passed: checks.filter((check) => check.pass).length
+      };
+    }
+
+    function createSky() {
+      if (state.skyMaterial) {
+        state.skyMaterial.uniforms.topColor.value.set(0x5f7e93);
+        state.skyMaterial.uniforms.horizonColor.value.set(0xd8d7b8);
+        return;
+      }
+
+      const skyMaterial = new THREE.ShaderMaterial({
+        side: THREE.BackSide,
+        depthWrite: false,
+        uniforms: {
+          topColor: { value: new THREE.Color(0x58798f) },
+          horizonColor: { value: new THREE.Color(0xd8d7b8) },
+          groundColor: { value: new THREE.Color(0x687057) }
+        },
+        vertexShader: `
+          varying vec3 vWorldPosition;
+          void main() {
+            vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+            vWorldPosition = worldPosition.xyz;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 topColor;
+          uniform vec3 horizonColor;
+          uniform vec3 groundColor;
+          varying vec3 vWorldPosition;
+          void main() {
+            float h = normalize(vWorldPosition).y;
+            vec3 sky = mix(horizonColor, topColor, smoothstep(-0.02, 0.72, h));
+            sky = mix(groundColor, sky, smoothstep(-0.34, 0.06, h));
+            gl_FragColor = vec4(sky, 1.0);
+          }
+        `
+      });
+
+      const sky = new THREE.Mesh(
+        new THREE.SphereGeometry(280, 36, 18),
+        skyMaterial
+      );
+      sky.name = "sky-dome";
+      scene.add(sky);
+      state.skyMaterial = skyMaterial;
+    }
+
+    function setSkyColors(config, rng) {
+      if (!state.skyMaterial) {
+        return;
+      }
+      const skyTone = choice(rng, [0x58798f, 0x60869a, 0x6c8792, 0x55758b]);
+      const horizonTone = choice(rng, [0xd8d7b8, 0xd7cfaa, 0xc9d1bd, 0xe0cda9]);
+      state.skyMaterial.uniforms.topColor.value.setHex(skyTone);
+      state.skyMaterial.uniforms.horizonColor.value.setHex(horizonTone);
+      state.skyMaterial.uniforms.groundColor.value.setHex(0x687057);
+      scene.fog.color.setHex(horizonTone);
+      renderer.setClearColor(horizonTone, 1);
+    }
+
+    function disposeGeneratedGroup(group) {
+      const materials = new Set();
+      const textures = new Set([
+        ...state.generatedTextures,
+        ...state.waterTextures
+      ]);
+
+      group.traverse((object) => {
+        if (object.userData.externalModel) {
+          return;
+        }
+        if (object.geometry && !object.geometry.userData.shared) {
+          object.geometry.dispose();
+        }
+        if (object.material) {
+          const objectMaterials = Array.isArray(object.material)
+            ? object.material
+            : [object.material];
+          objectMaterials.forEach((material) => materials.add(material));
+        }
+      });
+
+      materials.forEach((material) => {
+        if (material.userData.shared) {
+          return;
+        }
+        Object.values(material).forEach((value) => {
+          if (value && value.isTexture) {
+            textures.add(value);
+          }
+        });
+        if (material.uniforms) {
+          Object.values(material.uniforms).forEach((uniform) => {
+            if (uniform?.value?.isTexture) {
+              textures.add(uniform.value);
+            }
+          });
+        }
+        material.dispose();
+      });
+
+      textures.forEach((texture) => {
+        if (!texture.userData.shared) {
+          texture.dispose();
+        }
+      });
+      state.generatedTextures = [];
+      state.waterTextures = [];
+    }
+
+    function disposeGeneratedTextures() {
+      const textures = new Set([
+        ...state.generatedTextures,
+        ...state.waterTextures
+      ]);
+      textures.forEach((texture) => texture.dispose());
+      state.generatedTextures = [];
+      state.waterTextures = [];
+    }
+
+    async function initializePostProcessing() {
+      if (postProcessingRequested || postProcessingReady) {
+        return;
+      }
+      postProcessingRequested = true;
+
+      try {
+        const importWithTimeout = (path, timeout = 6000) => withTimeout(
+          import(path),
+          timeout,
+          `后处理模块加载超时：${path}`
+        );
+        const [
+          { EffectComposer },
+          { RenderPass },
+          { UnrealBloomPass },
+          { OutputPass },
+          { SMAAPass },
+          { RoomEnvironment }
+        ] = await Promise.all([
+          importWithTimeout("three/addons/postprocessing/EffectComposer.js"),
+          importWithTimeout("three/addons/postprocessing/RenderPass.js"),
+          importWithTimeout("three/addons/postprocessing/UnrealBloomPass.js"),
+          importWithTimeout("three/addons/postprocessing/OutputPass.js"),
+          importWithTimeout("three/addons/postprocessing/SMAAPass.js"),
+          importWithTimeout("three/addons/environments/RoomEnvironment.js")
+        ]);
+
+        const pmremGenerator = new THREE.PMREMGenerator(renderer);
+        const environmentScene = new RoomEnvironment();
+        const environmentTarget = pmremGenerator.fromScene(environmentScene, 0.04);
+        scene.environment = environmentTarget.texture;
+        environmentScene.dispose();
+        pmremGenerator.dispose();
+
+        composer = new EffectComposer(renderer);
+        composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        composer.setSize(window.innerWidth, window.innerHeight);
+        composer.addPass(new RenderPass(scene, camera));
+        composer.addPass(new UnrealBloomPass(
+          new THREE.Vector2(window.innerWidth, window.innerHeight),
+          0.2,
+          0.34,
+          0.9
+        ));
+        composer.addPass(new SMAAPass(window.innerWidth, window.innerHeight));
+        composer.addPass(new OutputPass());
+        postProcessingReady = true;
+        onResize();
+      } catch (error) {
+        composer = null;
+        console.warn("后处理增强不可用，核心场景继续使用 WebGLRenderer 渲染。", error);
+      } finally {
+        postProcessingRequested = false;
+      }
+    }
+
+    function updateChecks(result) {
+      ui.checks.innerHTML = "";
+      result.checks.forEach((check) => {
+        const row = document.createElement("div");
+        row.className = `check${check.pass ? "" : " fail"}`;
+        const dot = document.createElement("i");
+        dot.className = "check-dot";
+        const label = document.createElement("span");
+        label.textContent = check.label;
+        row.append(dot, label);
+        ui.checks.appendChild(row);
+      });
+
+      ui.ruleSummary.textContent = result.allPass
+        ? `规则校验 ${result.passed}/${result.checks.length}`
+        : `规则异常 ${result.passed}/${result.checks.length}`;
+      ui.ruleSummary.style.color = result.allPass ? "var(--accent-2)" : "var(--danger)";
+    }
+
+    function updateStats(data) {
+      ui.seed.textContent = `seed ${data.seed.toString(16).padStart(8, "0")}`;
+      ui.statRings.textContent = `${["一围", "二围", "三围"][data.config.ringCount - 1]} / 横屋 ${data.config.wingCount}`;
+      ui.statMaterial.textContent = `${data.config.wallType} / 天井 ${data.config.courtyardCount}`;
+      ui.statPond.textContent = data.config.pondShape;
+      ui.statDecoration.textContent = `${Math.round(data.config.decorationDensity * 100)}%`;
+      ui.statBuildings.textContent = `${data.houses.length} 宅 / ${data.farms.length} 田`;
+      ui.statPagoda.textContent = `${data.config.pagodaSides}角 / ${data.config.pagodaFloors}层`;
+    }
+
+    async function loadExternalModels() {
+      if (state.externalLoadPromise) {
+        return state.externalLoadPromise;
+      }
+      if (state.modelsLoaded) {
+        return state.models;
+      }
+
+      state.loadingModels = true;
+      state.modelErrors = [];
+      updateModelUi();
+      ui.protocolNote.textContent = location.protocol === "file:"
+        ? "正在尝试读取本地 GLB；file:// 被浏览器拦截时会自动使用程序化模型"
+        : "正在并行检测本地 GLB 模型";
+
+      state.externalLoadPromise = (async () => {
+        const entries = Object.entries(ASSET_MANIFEST);
+        const loadEntry = async ([key, config]) => {
+          try {
+            const gltf = await withTimeout(
+              gltfLoader.loadAsync(config.path),
+              config.timeout ?? 4500,
+              `GLB 加载超时：${config.path}`
+            );
+            gltf.scene.name = `external-${key}`;
+            gltf.scene.traverse((child) => {
+              if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+                if (child.material) {
+                  const materials = Array.isArray(child.material) ? child.material : [child.material];
+                  materials.forEach((material) => {
+                    material.side = THREE.FrontSide;
+                    material.needsUpdate = true;
+                  });
+                }
+              }
+            });
+            state.models.set(key, gltf.scene);
+          } catch (error) {
+            state.modelErrors.push({
+              key,
+              message: error?.message ?? "unknown error"
+            });
+          }
+        };
+
+        // 先单独探测整体模型；命中后不再请求其它拆分模型，避免重复显示。
+        const preferredEntry = entries.find(([key]) => key === "village");
+        if (preferredEntry) {
+          await loadEntry(preferredEntry);
+        }
+
+        // 缺少整体 GLB 时，再并行探测各个拆分模型。并行可避免多个 404
+        // 依次等待，把首屏之外的模型刷新延迟累加到几十秒。
+        if (!state.models.has("village")) {
+          await Promise.all(
+            entries
+              .filter(([key]) => key !== "village")
+              .map(loadEntry)
+          );
+        }
+
+        state.modelsLoaded = true;
+        state.loadingModels = false;
+        updateModelUi();
+        return state.models;
+      })().finally(() => {
+        state.externalLoadPromise = null;
+      });
+
+      return state.externalLoadPromise;
+    }
+
+    function updateModelUi() {
+      const loaded = state.models.size;
+      const enabled = ui.useGLB.checked;
+      if (!enabled) {
+        ui.modelStatus.textContent = "程序化模型模式";
+        ui.fallbackNotice.hidden = false;
+        ui.fallbackNotice.textContent = "当前为纯代码预览模式，加载本地 GLB 可获极致画质";
+        return;
+      }
+      if (state.loadingModels) {
+        ui.modelStatus.textContent = "正在读取本地 GLB...";
+        ui.fallbackNotice.hidden = true;
+        return;
+      }
+      if (loaded > 0) {
+        ui.modelStatus.textContent = state.models.has("village")
+          ? "已载入整体围龙屋 GLB"
+          : `已载入 ${loaded} 个 GLB`;
+        ui.fallbackNotice.hidden = true;
+      } else {
+        ui.modelStatus.textContent = "纯代码预览模式";
+        ui.fallbackNotice.hidden = false;
+        ui.fallbackNotice.textContent = "当前为纯代码预览模式，加载本地 GLB 可获极致画质";
+      }
+    }
+
+    async function generateMap() {
+      if (state.isGenerating) {
+        return;
+      }
+      state.isGenerating = true;
+      ui.generate.disabled = true;
+      ui.loading.classList.remove("hidden");
+      await nextFrame();
+      await yieldToBrowser();
+
+      try {
+        state.seed = makeSeed();
+        state.rng = mulberry32(state.seed);
+        const rng = state.rng;
+        const config = createConfig(rng);
+        const plan = createRoadPlan(rng, config);
+        const terrainSystem = createTerrainSystem(config, plan);
+        const { heightAt, waterY } = terrainSystem;
+
+        disposeGeneratedGroup(worldRoot);
+        while (worldRoot.children.length) {
+          worldRoot.remove(worldRoot.children[0]);
+        }
+        state.waterMaterials = [];
+        const materials = createMaterialSet(config, rng);
+
+        setSkyColors(config, rng);
+
+        const reservedZones = [
+          {
+            x: config.tulouX,
+            z: config.tulouZ,
+            r: config.radius + WORLD.cell,
+            type: "tulou"
+          },
+          {
+            x: config.pondCenter.x,
+            z: config.pondCenter.z,
+            r: config.pondRadius + WORLD.cell,
+            type: "pond"
+          },
+          {
+            x: config.tulouX,
+            z: config.tulouZ - config.radius - 9,
+            r: 8 + config.radius * 0.15,
+            type: "fengshui-forest"
+          },
+          {
+            x: config.tulouX,
+            z: config.tulouZ - config.radius * 0.45,
+            r: config.radius * 0.78,
+            type: "huatai"
+          }
+        ];
+
+        const terrain = createTerrainMesh(materials, heightAt);
+        worldRoot.add(terrain);
+        worldRoot.add(createRiver(plan, materials, heightAt, waterY));
+        worldRoot.add(createRoads(plan, materials, heightAt, waterY));
+        worldRoot.add(createBridge(plan, materials, heightAt, waterY));
+        await yieldToBrowser();
+
+        const tulouArea = createTulouArea(config, materials, rng, heightAt);
+        worldRoot.add(tulouArea.group);
+        worldRoot.add(tulouArea.pond.group);
+        await yieldToBrowser();
+
+        const pagoda = createPagodaZone(
+          plan,
+          config,
+          materials,
+          rng,
+          heightAt,
+          reservedZones
+        );
+
+        const houses = placeHouses(
+          config,
+          plan,
+          materials,
+          rng,
+          heightAt,
+          reservedZones
+        );
+        await yieldToBrowser();
+
+        const farms = placeFarms(
+          config,
+          plan,
+          houses,
+          materials,
+          rng,
+          heightAt,
+          reservedZones
+        );
+        await yieldToBrowser();
+
+        const paifangs = placePaifangs(
+          plan,
+          config,
+          materials,
+          rng,
+          heightAt
+        );
+
+        const vegetation = createVegetation(
+          config,
+          plan,
+          materials,
+          rng,
+          heightAt,
+          reservedZones,
+          tulouArea
+        );
+        await yieldToBrowser();
+
+        const data = {
+          seed: state.seed,
+          config,
+          plan,
+          terrainSystem,
+          tulouArea,
+          pagoda,
+          houses,
+          farms,
+          paifangs,
+          vegetation,
+          materials,
+          reservedZones
+        };
+        data.validation = validateMap(data);
+
+        state.mapData = data;
+        if (state.cameraMode === "overview") {
+          const center = new THREE.Vector3(config.tulouX, 0, config.tulouZ);
+          const overviewDistance = config.radius * 6.2;
+          controls.target.copy(center).add(new THREE.Vector3(4, 0, 0));
+          camera.position.copy(controls.target).add(
+            new THREE.Vector3(
+              overviewDistance * 0.72,
+              overviewDistance * 1.08,
+              overviewDistance * 0.78
+            )
+          );
+        } else {
+          const cameraAngle = rng() * Math.PI * 2;
+          const cameraRadius = randRange(rng, 130, 162);
+          camera.position.set(
+            Math.cos(cameraAngle) * cameraRadius,
+            randRange(rng, 82, 108),
+            Math.sin(cameraAngle) * cameraRadius
+          );
+          controls.target.set(randRange(rng, -9, 5), 0, randRange(rng, -4, 5));
+        }
+        controls.enabled = true;
+        controls.update();
+
+        updateStats(data);
+        updateChecks(data.validation);
+
+        updateModelUi();
+        if (state.models.size === 0) {
+          ui.protocolNote.textContent = location.protocol === "file:"
+            ? "file:// 模式无法读取 GLB，当前为纯代码预览模式，加载本地 GLB 可获极致画质"
+            : "当前为纯代码预览模式，加载本地 GLB 可获极致画质";
+        } else {
+          ui.protocolNote.textContent = location.protocol === "file:"
+            ? "部分浏览器在 file:// 下无法读取 GLB，程序化模型仍可完整运行"
+            : `已从本地服务器读取 ${state.models.size} 个 GLB，并自动将模型朝向接入道路体系`;
+        }
+
+        renderer.shadowMap.needsUpdate = true;
+      } catch (error) {
+        console.error(error);
+        ui.protocolNote.textContent = `生成失败：${error.message}`;
+        ui.ruleSummary.textContent = "规则校验失败";
+      } finally {
+        ui.loading.classList.add("hidden");
+        ui.generate.disabled = false;
+        state.isGenerating = false;
+      }
+    }
+
+    // =========================================================
+    // 05 渲染循环与后处理模块
+    // =========================================================
+
+    function tweenCamera(position, target, duration = 860) {
+      state.cameraTween = {
+        fromPosition: camera.position.clone(),
+        toPosition: position.clone(),
+        fromTarget: controls.target.clone(),
+        toTarget: target.clone(),
+        startedAt: performance.now(),
+        duration
+      };
+      controls.enabled = false;
+    }
+
+    function updateCameraTween(now) {
+      if (!state.cameraTween) {
+        return;
+      }
+      const tween = state.cameraTween;
+      const rawT = clamp((now - tween.startedAt) / tween.duration, 0, 1);
+      const eased = 1 - Math.pow(1 - rawT, 3);
+      camera.position.lerpVectors(tween.fromPosition, tween.toPosition, eased);
+      controls.target.lerpVectors(tween.fromTarget, tween.toTarget, eased);
+      if (rawT >= 1) {
+        state.cameraTween = null;
+        controls.enabled = true;
+      }
+    }
+
+    function updateKeyboardPan(delta) {
+      if (state.keys.size === 0 || state.cameraTween) {
+        return;
+      }
+      const forward = new THREE.Vector3();
+      camera.getWorldDirection(forward);
+      forward.y = 0;
+      if (forward.lengthSq() < 0.0001) {
+        forward.set(0, 0, -1);
+      }
+      forward.normalize();
+      const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+      const move = new THREE.Vector3();
+
+      if (state.keys.has("KeyW") || state.keys.has("ArrowUp")) {
+        move.add(forward);
+      }
+      if (state.keys.has("KeyS") || state.keys.has("ArrowDown")) {
+        move.sub(forward);
+      }
+      if (state.keys.has("KeyA") || state.keys.has("ArrowLeft")) {
+        move.sub(right);
+      }
+      if (state.keys.has("KeyD") || state.keys.has("ArrowRight")) {
+        move.add(right);
+      }
+      if (move.lengthSq() === 0) {
+        return;
+      }
+
+      move.normalize();
+      const speed = delta * controls.getDistance() * 0.34;
+      camera.position.addScaledVector(move, speed);
+      controls.target.addScaledVector(move, speed);
+    }
+
+    function setViewMode(mode) {
+      state.cameraMode = mode;
+      const isOverview = mode === "overview";
+      controls.enableRotate = !isOverview;
+      controls.enablePan = true;
+      controls.enableZoom = true;
+      controls.minPolarAngle = isOverview ? Math.PI * 0.08 : Math.PI * 0.12;
+      controls.maxPolarAngle = isOverview ? Math.PI * 0.48 : Math.PI * 0.475;
+
+      ui.viewOrbit.classList.toggle("active", !isOverview);
+      ui.viewOverview.classList.toggle("active", isOverview);
+      ui.viewOrbit.setAttribute("aria-pressed", String(!isOverview));
+      ui.viewOverview.setAttribute("aria-pressed", String(isOverview));
+
+      const center = state.mapData?.tulouArea
+        ? new THREE.Vector3(state.mapData.config.tulouX, 0, state.mapData.config.tulouZ)
+        : new THREE.Vector3(-8, 0, -2);
+      const target = isOverview
+        ? center.clone().add(new THREE.Vector3(4, 0, 0))
+        : new THREE.Vector3(-8, 0, -1);
+      const distance = state.mapData?.config.radius
+        ? state.mapData.config.radius * 6.2
+        : 118;
+      const position = isOverview
+        ? target.clone().add(new THREE.Vector3(distance * 0.72, distance * 1.08, distance * 0.78))
+        : target.clone().add(new THREE.Vector3(distance * 0.9, distance * 0.74, distance * 0.92));
+      tweenCamera(position, target);
+    }
+
+    function onResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight, false);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      if (composer) {
+        composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        composer.setSize(window.innerWidth, window.innerHeight);
+      }
+    }
+
+    function animate(now) {
+      const delta = Math.min((now - state.lastFrame) / 1000, 0.05);
+      state.lastFrame = now;
+      state.waterTextures.forEach((texture, index) => {
+        texture.offset.x -= delta * (0.018 + index * 0.0008);
+        texture.offset.y += delta * 0.0025;
+      });
+      state.waterMaterials.forEach((material) => {
+        if (material.userData.shader) {
+          material.userData.shader.uniforms.uWaveTime.value += delta;
+        }
+      });
+      updateCameraTween(now);
+      updateKeyboardPan(delta);
+      controls.update();
+      if (composer) {
+        composer.render(delta);
+      } else {
+        renderer.render(scene, camera);
+      }
+      requestAnimationFrame(animate);
+    }
+
+    // =========================================================
+    // 06 UI 控制模块：生成、视角、GLB 状态、键盘移动
+    // =========================================================
+
+    window.addEventListener("resize", onResize);
+    ui.generate.addEventListener("click", () => {
+      scheduleConstruction(() => generateMap(), 0);
+    });
+    ui.viewOrbit.addEventListener("click", () => setViewMode("orbit"));
+    ui.viewOverview.addEventListener("click", () => setViewMode("overview"));
+    ui.useGLB.addEventListener("change", () => {
+      updateModelUi();
+      if (state.mapData) {
+        scheduleConstruction(() => generateMap(), 0);
+      }
+    });
+
+    window.addEventListener("keydown", (event) => {
+      const target = event.target;
+      const isEditing = target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement;
+      if (isEditing) {
+        return;
+      }
+      if ([
+        "KeyW",
+        "KeyA",
+        "KeyS",
+        "KeyD",
+        "ArrowUp",
+        "ArrowDown",
+        "ArrowLeft",
+        "ArrowRight"
+      ].includes(event.code)) {
+        event.preventDefault();
+        state.keys.add(event.code);
+      }
+    });
+
+    window.addEventListener("keyup", (event) => {
+      state.keys.delete(event.code);
+    });
+
+    window.addEventListener("blur", () => {
+      state.keys.clear();
+    });
+
+    createSky();
+    onResize();
+    requestAnimationFrame(animate);
+
+    updateModelUi();
+    // 首屏先跑程序化地图，保证即使 CDN、GLB 或后处理失败也能立即看到结果。
+    scheduleConstruction(() => generateMap(), 50);
+    scheduleConstruction(() => initializePostProcessing(), 1400);
+
+    if (ui.useGLB.checked) {
+      setTimeout(() => {
+        loadExternalModels()
+          .then((models) => {
+            updateModelUi();
+            if (models.size > 0 && ui.useGLB.checked) {
+              scheduleConstruction(() => generateMap(), 0);
+            }
+          })
+          .catch((error) => {
+            console.warn("外部模型探测失败，继续使用程序化模型。", error);
+            state.modelsLoaded = true;
+            state.loadingModels = false;
+            updateModelUi();
+          });
+      }, 1200);
+    }
+  </script>
+</body>
+</html>
